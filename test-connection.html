@@ -17,7 +17,7 @@
             try {
                 window.FVARS.SECURE_HOST           = window.FVARS.SECURE_API_URL.replace( /\/api/, '');      
                 console.log(`Testing connection to ${window.FVARS.SECURE_HOST}/health` );                   // .(51108.01.2 RAM Should be: SERVER_API_URL/health)
-                const response = await fetch(     `${window.FVARS.SECURE_HOST}/health`, {                   // .(51110.03.1 RAM Include creds).(51108.01.3 RAM Was: http://localhost:3001/health)
+                const response = await fetch(     `${window.FVARS.SECURE_HOST}/health`, {                   // .(51110.03.1 RAM Include creds).(51108.01.3 RAM Was: http://localhost:3001/health)   
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
