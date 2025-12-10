@@ -13,7 +13,7 @@ const ConfigManager = {
             throw new Error('No client _config.js file found');
        } else {
             this.config = window.FVARS;
-            this.config.port       = window.FVARS.SECURE_API_URL.match( /:([0-9]+)\/?/)?.slice(1,2)[0] ?? ''      // .(51108.02.1 RAM Was SECURE_HOST).(51108.02.1 RAM Was SECURE_PATH).(51013.04.9 RAM for SecureAccess client)    
+            this.config.port       = window.FVARS.SECURE_API_URL.match(/:([0-9]+)\/?/)?.slice(1,2)[0] ?? '' // .(51108.01.4 RAM Was SECURE_HOST).(51113.04.9 RAM Was SECURE_PATH)
             this.config.apiBaseUrl = window.FVARS.SECURE_API_URL
      return this.config;
             }                                                                           // .(51013.04.8 End)
