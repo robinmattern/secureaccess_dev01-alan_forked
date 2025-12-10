@@ -109,7 +109,7 @@ const app = express();
 
 const PORT     =  process.env.PORT // || 3005;
 const NODE_ENV =  process.env.NODE_ENV || 'development';
-const HOST     =  NODE_ENV === 'production' ? process.env.PRODUCTION_HOST : process.env.HOST;    // .(51013.03.1 RAM PRODUCTION_HOST is not defined)
+const HOST     =  NODE_ENV === 'production' ? process.env.PRODUCTION_HOST : process.env.HOST;    // .(51013.03.1 RAM PRODUCTION_HOST is not defined)  
 //nst BASE_URL = `http${NODE_ENV === 'production' ? 's' : ''}://${HOST}:${PORT}`;                //#.(51013.03.2)
 const BASE_URL = `${HOST}:${PORT}`;  
 const SECURE_PATH = process.FVARS.SECURE_PATH || ''                                              // .(51013.04.17 RAM HOST includes http or https)
