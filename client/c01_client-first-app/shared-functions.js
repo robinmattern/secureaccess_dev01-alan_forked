@@ -8,15 +8,15 @@ const ConfigManager = {
         if (this.config) {
             return this.config;
         }
-       if (!window.FVARS) {                                                             // .(51013.04.15 RAM Use formR Vars Beg)
+       if (!window.FVARS) {                                                             // .(51013.04.8 RAM Use formR Vars Beg)
             console.error('  No client _config.js file found:', error);
             throw new Error('No client _config.js file found');
        } else {
             this.config = window.FVARS;
-            this.config.port       = window.FVARS.SECURE_API_URL.match( /:([0-9]+)\/?/)?.slice(1,2)[0] ?? ''      // .(51108.02.1 RAM Was SECURE_HOST).(51108.02.1 RAM Was SECURE_PATH).(51013.03.9 RAM for SecureAccess client)    
+            this.config.port       = window.FVARS.SECURE_API_URL.match( /:([0-9]+)\/?/)?.slice(1,2)[0] ?? ''      // .(51108.02.1 RAM Was SECURE_HOST).(51108.02.1 RAM Was SECURE_PATH).(51013.04.9 RAM for SecureAccess client)    
             this.config.apiBaseUrl = window.FVARS.SECURE_API_URL
      return this.config;
-            }                                                                           // .(51013.04.15 End)
+            }                                                                           // .(51013.04.8 End)
 // ----------------------------------------------------------------------------
 
         // Since client files are served by the same server, use same origin

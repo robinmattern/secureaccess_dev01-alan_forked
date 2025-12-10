@@ -783,8 +783,8 @@
             }
 
             try {
-                console.log(    `  fetching( "${API_BASE_URL}${endpoint}" )` )          // .(51013.04.5)
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);    // .(51013.04.6)
+                console.log(    `  fetching( "${API_BASE_URL}${endpoint}" )` )          // .(51013.04.5) 
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);    // .(51013.04.6) 
 
                 if (!response.ok) {
                     if (response.status === 401) {
@@ -807,7 +807,7 @@
 
             } catch (error) {
                 if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                    throw new Error(`Cannot connect to server. Make sure your backend is running on ${API_BASE_URL}`);   // .(51013.04.7)
+                    throw new Error(`Cannot connect to server. Make sure your backend is running on ${API_BASE_URL}`);   // .(51013.04.7) 
                 }
                 throw error;
             }

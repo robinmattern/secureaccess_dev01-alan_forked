@@ -14,10 +14,10 @@ const validator = require('validator');
 //    dotenv.config( { path:       `${ __dirname }/.env`) } );                          //#.(51013.01.3 RAM No workie in windows)
   var bOK =  dotenv.config( { path: path.join(__dirname, '.env') } );                   // .(51112.04.1 RAM Check if found .env)
   if (bOK.error) { console.warn('⚠️  Missing .env file, using defaults'); }             // .(51112.04.2 RAM Warn if not found)
-                                                                                        // .(51013.04.13 RAM This works everywhere)
-const SECURE_API_URL   = process.FVARS.SERVER_API_URL || ''                             // .(51013.04.14 RAM not SECURE_PATH)
-      process.env.PORT = SECURE_API_URL.match(   /:([0-9]+)\/?/)?.slice(1,2)[0] ?? ''   // .(51013.04.15 RAM Define them here)
-      process.env.HOST = SECURE_API_URL.match(/(.+):[0-9]+\/?/ )?.slice(1,2)[0] ?? ''   // .(51013.04.16)
+                                                                                        // .(51013.04.13 RAM This works everywhere) 
+const SECURE_API_URL   = process.FVARS.SERVER_API_URL || ''                             // .(51013.04.14 RAM not SECURE_PATH) 
+      process.env.PORT = SECURE_API_URL.match(   /:([0-9]+)\/?/)?.slice(1,2)[0] ?? ''   // .(51013.04.15 RAM Define them here) 
+      process.env.HOST = SECURE_API_URL.match(/(.+):[0-9]+\/?/ )?.slice(1,2)[0] ?? ''   // .(51013.04.16) 
 
 const DB_LOCATION      = process.FVARS.DB_LOCATION || process.env.DB_LOCATION           // .(51112.03.5 RAM Check if DB_LOCATION has changed Beg) 
   if (DB_LOCATION     != process.env.DB_LOCATION) { 
