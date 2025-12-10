@@ -253,7 +253,10 @@
                 document.body.appendChild(overlay);
             });
         }
-        let API_BASE_URL = window.location.origin + '/api';
+//      let API_BASE_URL   =  window.location.origin + '/api';                          //#.(51013.04.7)
+        let API_BASE_URL   =  window.FVARS.SECURE_API_URL;                              // .(51013.04.7 RAM S.B SECURE_API_URL)
+        let SECURE_API_URL =  window.FVARS.SECURE_API_URL;                              // .(51013.04.7 RAM Not API_BASE_URL)
+
 
         // Check admin session authentication
         function checkAdminSession() {

@@ -6,15 +6,18 @@
 <body>
     <h1>Testing Server Connection</h1>
     <div id="results"></div>
-    <script src="_config.js"></script>
+
+<!--<script src="_config.js"></script>                             --><!--#.(51210.02.2) -->
+    <script src="./client/c01_client-first-app/_config.js"></script>  <!-- .(51210.02.2 RAM ???) -->
+
     <script>
         async function testConnection() {
             const results = document.getElementById('results');
             
             try {
-                window.fvaRs.SECURE_SERVER         = window.fvaRs.SECURE_API_URL.replace( /\/api/, '');     
-                console.log(`Testing connection to ${window.fvaRs.SECURE_SERVER}/health` );                   
-                const response = await fetch(`${window.fvaRs.SECURE_SERVER}/health`, {
+                window.FVARS.SECURE_HOST           = window.FVARS.SECURE_API_URL.replace( /\/api/, '');      
+                console.log(`Testing connection to ${window.FVARS.SECURE_HOST}/health` );                 // .(51108.01.3 RAM Should be: SECURE_API_URL/health)
+                const response = await fetch(     `${window.FVARS.SECURE_HOST}/health`, {                 // .(51110.03.1 RAM Include creds).(51108.01.4 RAM Was: http://localhost:3001/health)
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',

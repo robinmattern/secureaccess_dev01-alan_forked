@@ -779,7 +779,7 @@
             </div>
         </div>
     </div>
-    <script src="./_config.js"></script>                                              <!-- .(51013.04.4 RAM Use this) -->
+    <script src="./_config.js"></script>                                              <!-- .(51013.01.1 RAM Use this) -->
     <script>
         // acm_Prompts.js inline
         const ACM_APP_TITLE = 'SecureAccess';
@@ -867,9 +867,9 @@
         // No client-side token checks needed with HTTP-only cookies
         
         // Configuration   - will be set dynamically from server
-//      let API_BASE_URL   =  window.location.origin + '/api';                          //#.(51013.04.5)
-        let API_BASE_URL   =  window.fvaRs.SECURE_API_URL;                              // .(51013.04.5 RAM S.B SECURE_API_URL)
-        let SECURE_API_URL =  window.fvaRs.SECURE_API_URL;                              // .(51013.04.6 RAM Not API_BASE_URL)
+//      let API_BASE_URL   =  window.location.origin + '/api';                          //#.(51013.04.3)
+        let API_BASE_URL   =  window.FVARS.SECURE_API_URL;                              // .(51013.04.3 RAM S.B SERVER_API_URL)
+        let SECURE_API_URL =  window.FVARS.SECURE_API_URL;                              // .(51013.04.4 RAM ?? Only API_BASE_URL S.B. used)
         
         // State management
         let users = [];

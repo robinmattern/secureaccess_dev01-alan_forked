@@ -6,11 +6,13 @@
 <body>
     <h1>Authentication Test</h1>
     <div id="result"></div>
-    <script src="_config.js"></script>
+
+<!--<script src="_config.js"></script>                             --><!--#.(51210.02.1) -->
+    <script src="./client/c01_client-first-app/_config.js"></script>  <!-- .(51210.02.1 RAM ???) -->
     <script>
         async function testAuth() {
             try {
-                const response = await fetch(`${window.fvaRs.SECURE_API_URL}/auth/verify`, {
+                const response = await fetch(`${window.FVARS.SERVER_API_URL}/auth/verify`, {  // .(51108.01.1 RAM Was: http://localhost:3000/api/auth/verify)
                     method: 'GET',
                     credentials: 'include'
                 });

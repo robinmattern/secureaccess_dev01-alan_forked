@@ -8,20 +8,20 @@ const ConfigManager = {
         if (this.config) {
             return this.config;
         }
-       if (!window.fvaRs) {                                                             // .(51013.04.15 RAM Use formR Vars Beg)
+       if (!window.FVARS) {                                                             // .(51013.04.15 RAM Use formR Vars Beg)
             console.error('  No client _config.js file found:', error);
             throw new Error('No client _config.js file found');
        } else {
-            this.config = window.fvaRs;
-            this.config.port       = window.fvaRs.SECURE_PATH.match( /:([0-9]+)\/?/)?.slice(1,2)[0] ?? ''      // .(51013.03.9 RAM Fpr SecureAccess client)    
-            this.config.apiBaseUrl = window.fvaRs.SECURE_API_URL
+            this.config = window.FVARS;
+            this.config.port       = window.FVARS.SECURE_API_URL.match( /:([0-9]+)\/?/)?.slice(1,2)[0] ?? ''      // .(51108.02.1 RAM Was SECURE_HOST).(51108.02.1 RAM Was SECURE_PATH).(51013.03.9 RAM for SecureAccess client)    
+            this.config.apiBaseUrl = window.FVARS.SECURE_API_URL
      return this.config;
             }                                                                           // .(51013.04.15 End)
 // ----------------------------------------------------------------------------
 
         // Since client files are served by the same server, use same origin
         try {
-            const response = await fetch(`${window.location.origin}/config`);
+//          const response = await fetch(`${window.location.origin}/config`);
             if (response.ok) {
                 this.config = await response.json();
                 return this.config;
@@ -33,7 +33,7 @@ const ConfigManager = {
         // Fallback to current origin
         this.config = {
             port: window.location.port || 3005,
-            apiBaseUrl: `${window.location.origin}/api`
+//          apiBaseUrl: `${window.location.origin}/api`
         };
         return this.config;
     }
