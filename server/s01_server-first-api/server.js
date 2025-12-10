@@ -19,11 +19,11 @@ const SECURE_API_URL   = process.FVARS.SERVER_API_URL || ''                     
       process.env.PORT = SECURE_API_URL.match(   /:([0-9]+)\/?/)?.slice(1,2)[0] ?? ''   // .(51013.04.15 RAM Define them here) 
       process.env.HOST = SECURE_API_URL.match(/(.+):[0-9]+\/?/ )?.slice(1,2)[0] ?? ''   // .(51013.04.16) 
 
-const DB_LOCATION      = process.FVARS.DB_LOCATION || process.env.DB_LOCATION           // .(51112.03.5 RAM Check if DB_LOCATION has changed Beg) 
+const DB_LOCATION      = process.FVARS.DB_LOCATION || process.env.DB_LOCATION           // .(51112.04.3 RAM Check if DB_LOCATION has changed Beg) 
   if (DB_LOCATION     != process.env.DB_LOCATION) { 
       console.warn(`⚠️  DB_LOCATION mismatch: Switching to ${DB_LOCATION}.`);
   var bOK =  dotenv.config( { path: path.join( __dirname, `.env-${DB_LOCATION.toLowerCase()}` ), override: true } );                  
-  if (bOK.error) { console.warn(`❌ Missing .env-${DB_LOCATION} file. Aborting`);      // .(51112.04.2 RAM Abort if not found)
+  if (bOK.error) { console.warn(`❌ Missing .env-${DB_LOCATION} file. Aborting`);      // .(51112.04.4 RAM Abort if not found)
       process.exit() 
       }  }                                                                              // .(51112.03.5 End)
 
@@ -124,7 +124,7 @@ const allowedOrigins = (NODE_ENV === 'production')
 //  : [ `${BASE_URL}`, SECURE_PATH, 'http://127.0.0.1:49306', 'http://localhost:49306', 'http://127.0.0.1:5500', 'http://localhost:5500' ];  // .(51013.04.18 RAM Was: Server: SECURE_API_URL)
 //  : [ `${BASE_URL}`, SECURE_PATH ];  
     :    allowedOrigins_;                                                                                   // .(51210.01.2) 
-                                                              // .(51113.01.1 RAM Clean up CORS)
+                                                               
     allowedOrigins.forEach( aHost => { 
         if (aHost.match(/localhost/) ) { allowedOrigins.push( aHost.replace( /localhost/, "127.0.0.1" ) ) } // .(51210.01.3 RAM Check both) 
         if (aHost.match(/127.0.0.1/) ) { allowedOrigins.push( aHost.replace( /127.0.0.1/, "localhost" ) ) } } )
