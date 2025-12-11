@@ -1,0 +1,10 @@
+{
+  "name": "secureaccess_apps",
+  "version": "1.0.0",
+  "scripts": {
+    "start:c01": "live-server client/c01_client-first-app        --port=57301 --no-browser",
+    "start:s01": "nodemon server/s01_server-first-api/server.js",
+    "start:c03": "live-server client/c03_register-cors-app       --port=57303 --no-browser",    
+    "start:s03": "nodemon server/s03_register-cors-api/server.mjs"
+  }
+}

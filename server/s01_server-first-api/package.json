@@ -1,5 +1,5 @@
 {
-  "name": "secureaccess_dev02-alan_s01_server-first-api",
+  "name": "secureaccess_dev01-alan_s01_server-first-api",
   "version": "1.02",
   "description": "Express API server for user management",
   "keywords": ["express", "mysql", "api", "users"],
@@ -10,4 +10,4 @@
     "start": "node server.js",
     "dev": "nodemon server.js"
   }
-}
+}  

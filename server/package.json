@@ -1,5 +1,5 @@
 {
-  "name": "secureaccess_dev02-alan_s01_server-first-api",
+  "name": "secureaccess_dev01-alan_s01_server-first-api",
   "version": "1.02",
   "description": "Express API server modules",
   "keywords": ["express", "mysql", "api", "users"],
@@ -22,5 +22,9 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
+  },
+  "scripts": {
+    "start:s01": "nodemon s01_server-first-api/server.js",
+    "start:s03": "nodemon s03_register-cors-api/server.mjs"
   }
 }
