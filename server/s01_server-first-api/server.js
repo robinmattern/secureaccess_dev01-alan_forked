@@ -117,7 +117,7 @@ const SECURE_PATH = process.FVARS.SECURE_PATH || ''                             
 // JWT Secret - In production, use environment variable
 const JWT_SECRET = process.env.JWT_SECRET || 'SecureAccess-JWT-Secret-Key-2024!@#$%';
 const JWT_EXPIRES_IN = '24h'; // Token expires in 24 hours
-  var allowedOrigins_ = process.FVARS.CORS_ORIGINS || [ `${BASE_URL}`, SECURE_PATH ]             // .(51210.01.1 RAM Add FVARS.CORS_ORIGINS) 
+  var allowedOrigins_ = process.FVARS.CORS_ORIGINS || [ `${BASE_URL}`, SECURE_PATH ]                        // .(51210.01.1 RAM Add FVARS.CORS_ORIGINS) 
 // Middleware
 const allowedOrigins = (NODE_ENV === 'production') 
     ? [ `${HOST}:${PORT}`, `${HOST}`]
