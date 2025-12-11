@@ -1,0 +1,8 @@
+{
+  "name": "secureaccess_apps",
+  "version": "1.0.0",
+  "scripts": {
+    "start":     "nodemon server.mjs",
+    "start:s03": "nodemon server.mjs"
+  }
+}

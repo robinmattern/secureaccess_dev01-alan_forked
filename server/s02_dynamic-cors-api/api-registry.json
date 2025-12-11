@@ -1,0 +1,26 @@
+{
+  "users": {
+    "user123": {
+      "apiKey": "key_abc123",
+      "allowedOrigins": ["https://app1.com", "https://app2.com"],
+      "allowedApis": ["APIapp1", "APIapp2"],
+      "active": true
+    },
+    "user456": {
+      "apiKey": "key_def456", 
+      "allowedOrigins": ["https://client.example.com"],
+      "allowedApis": ["APIapp1"],
+      "active": true
+    }
+  },
+  "apiApps": {
+    "APIapp1": {
+      "port": 3001,
+      "endpoints": ["/users", "/orders"]
+    },
+    "APIapp2": {
+      "port": 3002, 
+      "endpoints": ["/products", "/inventory"]
+    }
+  }
+}

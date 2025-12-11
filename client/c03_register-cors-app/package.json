@@ -1,0 +1,9 @@
+{
+  "name": "secureaccess_client-apps",
+  "version": "1.0.0",
+  "description": "Client applications",
+  "scripts": {
+    "start":     "live-server --port=57303 --no-browser",
+    "start:c03": "live-server --port=57303 --no-browser"
+  }
+}

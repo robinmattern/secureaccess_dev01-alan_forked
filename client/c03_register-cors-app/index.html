@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Key Registration</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .user-list { margin-top: 30px; }
+        .user-item { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 4px; }
+        .api-key { font-family: monospace; background: #f8f9fa; padding: 5px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>API Key Registration</h1>
+    
+    <form id="registerForm">
+        <div class="form-group">
+            <label for="userId">User ID:</label>
+            <input type="text" id="userId" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="allowedOrigins">Allowed Origins (one per line):</label>
+            <textarea id="allowedOrigins" rows="3" placeholder="https://example.com&#10;https://app.example.com"></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="allowedApis">Allowed APIs (one per line):</label>
+            <textarea id="allowedApis" rows="3" placeholder="APIapp1&#10;APIapp2"></textarea>
+        </div>
+        
+        <button type="submit">Register User</button>
+    </form>
+
+    <div class="user-list">
+        <h2>Registered Users</h2>
+        <button onclick="loadUsers()">Refresh Users</button>
+        <div id="usersList"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

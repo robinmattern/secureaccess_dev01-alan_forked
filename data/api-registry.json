@@ -1,0 +1,21 @@
+{
+  "users": {
+    "robinmattern": {
+      "apiKey": "key_c8fde0326d27ca2d607e055b27187dba",
+      "allowedOrigins": [],
+      "allowedApis": [],
+      "active": true,
+      "createdAt": "2025-11-15T16:17:45.255Z"
+    },
+    "robinmattern1": {
+      "apiKey": "key_a8071f32c0086c801561ce6b93349af5",
+      "allowedOrigins": [
+        "http://localhost:51200"
+      ],
+      "allowedApis": [],
+      "active": true,
+      "createdAt": "2025-11-15T16:22:14.298Z"
+    }
+  },
+  "apiApps": {}
+}
