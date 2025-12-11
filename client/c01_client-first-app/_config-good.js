@@ -15,7 +15,7 @@ var _FVARS = {
 
     "SECURE_HOST":          "http://localhost:55351", 
     "SECURE_API_URL":       "http://localhost:55351/api", 
-  }
+     }
   if (typeof(window)  != 'undefined') {  window.FVARS  = _FVARS; var aGlobal = "window"  }
   if (typeof(process) != 'undefined') {  process.FVARS = _FVARS; var aGlobal = "process" }
    

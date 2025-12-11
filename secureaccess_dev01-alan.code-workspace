@@ -1,11 +1,11 @@
 {
     "folders": [
-        {
+        {   "name": "SAS_dev01-alan",
             "path": "."
         }
     ],
     "settings": {
-        "liveServer.settings.port": 55301,
+        "liveServer.settings.port": 55302,
         "liveServer.settings.AdvanceCustomBrowserCmdLine": ""
     }
 }

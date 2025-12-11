@@ -1,0 +1,11 @@
+FVARS: 
+  PROJECT_NO:          "55"
+  PROJECT_NAME:        "SAS"
+  PROJECT_VERSION:     "1.02"
+  SERVER_PORT:         "55351"
+  SERVER_API_URL:      "http://localhost:#####/api"
+  CORS_ORIGINS:        "http://localhost:#####"
+  DATA_FOLDER:         "./data"
+  ENV_FILE:            "Remote"
+  C01_SECURE_PORT:     "55351"
+  C01_SECURE_API_URL:  "http://localhost:55351/api"
