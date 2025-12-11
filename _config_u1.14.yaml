@@ -6,6 +6,6 @@ FVARS:
   SERVER_API_URL:      "http://localhost:#####/api"
   CORS_ORIGINS:        "http://localhost:#####"
   DATA_FOLDER:         "./data"
-  ENV_FILE:            "Remote"
+  ENV_FILE:            ".env.remote"
   C01_SECURE_PORT:     "55351"
   C01_SECURE_API_URL:  "http://localhost:55351/api"
