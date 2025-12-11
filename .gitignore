@@ -1,4 +1,5 @@
 .env
+.amazonq*
 archive
 node_modules
 *_v[0-9]*

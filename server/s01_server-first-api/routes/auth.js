@@ -7,7 +7,10 @@ const {
   passwordResetRequest,
   passwordReset,
   logout,
-  refreshToken
+  refreshToken,
+  checkEmail,
+  createUser,
+  createAppUser
 } = require('../controllers/authController');
 const { 
   authenticateToken, 
@@ -72,6 +75,15 @@ router.post('/logout', authenticateToken, logout);
 
 // POST /api/auth/refresh - Refresh JWT token
 router.post('/refresh', authenticateToken, refreshToken);
+
+// POST /api/auth/check-email - Check if email exists
+router.post('/check-email', checkEmail);
+
+// POST /api/auth/create-user - Create new user from PKCE token
+router.post('/create-user', createUser);
+
+// POST /api/auth/create-app-user - Create app-user relationship
+router.post('/create-app-user', authenticateToken, createAppUser);
 
 // POST /api/auth/verify-admin - Verify admin access
 router.post('/verify-admin', authenticateToken, (req, res) => {

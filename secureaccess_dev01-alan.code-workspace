@@ -5,7 +5,7 @@
         }
     ],
     "settings": {
-        "liveServer.settings.port": 55302,
+        "liveServer.settings.port": 55301,
         "liveServer.settings.AdvanceCustomBrowserCmdLine": ""
     }
 }

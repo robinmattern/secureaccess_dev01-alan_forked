@@ -11,18 +11,18 @@
             const status = document.getElementById('status');
             
             try {
-                const response = await fetch('http://localhost:55351/health');
+                const response = await fetch('http://localhost:54333/health');
                 const data = await response.json();
                 
                 status.innerHTML = `
-                    <p style="color: green;">✅ Server is running on port 55351</p>
+                    <p style="color: green;">✅ Server is running on port 54333</p>
                     <p>Status: ${data.status}</p>
                     <p>Database: ${data.database}</p>
                     <p>Timestamp: ${data.timestamp}</p>
                 `;
             } catch (error) {
                 status.innerHTML = `
-                    <p style="color: red;">❌ Server is NOT running on port 55351</p>
+                    <p style="color: red;">❌ Server is NOT running on port 54333</p>
                     <p>Error: ${error.message}</p>
                     <p>Please start the server with: <code>cd server/s01_server-first-api && node server_v1.08.js</code></p>
                 `;

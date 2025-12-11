@@ -6,14 +6,14 @@ try {
         throw new Error('Process environment not available');
     }
     CONFIG = {
-        apiUrl: process.env.API_URL || 'http://localhost:55351',
+        apiUrl: process.env.API_URL || 'http://localhost:54383',
         appName: process.env.APP_NAME || 'SecureAccess'
     };
 } catch (error) {
     const errorMessage = error && error.message ? error.message : 'Unknown configuration error';
     console.error('Configuration error:', errorMessage);
     CONFIG = {
-        apiUrl: 'http://localhost:55351',
+        apiUrl: 'http://localhost:54333',
         appName: 'SecureAccess'
     };
 }

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Forgot Password</title>
+</head>
+<body>
+    <h1>Debug Forgot Password URL</h1>
+    <div id="debug"></div>
+    
+    <script>
+        const debug = document.getElementById('debug');
+        debug.innerHTML = `
+            <p><strong>Current URL:</strong> ${window.location.href}</p>
+            <p><strong>Search params:</strong> ${window.location.search}</p>
+            <p><strong>Search length:</strong> ${window.location.search.length}</p>
+            <p><strong>Hash:</strong> ${window.location.hash}</p>
+            <p><strong>Pathname:</strong> ${window.location.pathname}</p>
+        `;
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const username = urlParams.get('username');
+        debug.innerHTML += `<p><strong>Extracted username:</strong> "${username}"</p>`;
+        
+        // Test direct redirect
+        setTimeout(() => {
+            window.location.href = 'forgot-password.html?username=anewman';
+        }, 5000);
+    </script>
+</body>
+</html>

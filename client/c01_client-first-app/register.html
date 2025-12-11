@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureAccess - User Registration</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.97);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+            padding: 40px;
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+
+        .message {
+            color: #666;
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+
+        .error {
+            color: #e74c3c;
+            font-size: 16px;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+        }
+
+        .success {
+            color: #155724;
+            font-size: 16px;
+            margin-top: 20px;
+            padding: 15px;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 8px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Creating user account</h1>
+        <div class="message">
+            Processing your registration...
+            <div class="loading"></div>
+        </div>
+        <div id="result"></div>
+    </div>
+
+    <script src="./_config.js"></script>
+    <script src="pkce-utils.js"></script>
+    <script>
+        // PKCE token decoding function
+        window.decodePKCEToken = function(token) {
+            try {
+                // JWT has 3 parts separated by dots
+                const parts = token.split('.');
+                if (parts.length !== 3) {
+                    throw new Error('Invalid JWT format');
+                }
+                
+                // Decode the payload (second part)
+                let payload = parts[1];
+                // Handle base64url encoding
+                payload = payload.replace(/-/g, '+').replace(/_/g, '/');
+                while (payload.length % 4) {
+                    payload += '=';
+                }
+                
+                return JSON.parse(atob(payload));
+            } catch (error) {
+                console.error('Error decoding PKCE token:', error);
+                return null;
+            }
+        };
+        // Get API URL from config
+        let API_BASE_URL = window.fvaRs?.SECURE_API_URL || window.location.origin + '/api';
+
+        async function processRegistration() {
+            try {
+                // Get URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const pkceToken = urlParams.get('pkce');
+                
+                if (!pkceToken) {
+                    throw new Error('No PKCE token found in URL');
+                }
+
+                // Decode PKCE token
+                const pkceData = window.decodePKCEToken(pkceToken);
+                if (!pkceData) {
+                    throw new Error('Invalid PKCE token');
+                }
+
+                console.log('PKCE data:', pkceData);
+
+                // Check if email already exists
+                const checkResponse = await fetch(`${API_BASE_URL}/auth/check-email`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email: pkceData.email })
+                });
+
+                const checkResult = await checkResponse.json();
+                
+                if (checkResult.exists) {
+                    document.getElementById('result').innerHTML = 
+                        '<div class="error">An account with this email address already exists. Please use a different email or contact support.</div>';
+                    return;
+                }
+
+                // Create new user record
+                const userData = {
+                    first_name: pkceData.first_name,
+                    last_name: pkceData.last_name,
+                    email: pkceData.email,
+                    account_status: 'active',
+                    master_password_hash: pkceData.password,
+                    security_question_1: pkceData.security_question_1,
+                    security_question_2: pkceData.security_question_2,
+                    security_answer_1_hash: pkceData.security_answer_1,
+                    security_answer_2_hash: pkceData.security_answer_2,
+                    two_factor_secret: 0,
+                    jwt_secret_version: 1,
+                    refresh_token_rotation_enabled: 1,
+                    token_expiration_minutes: 60,
+                    role: 'User'
+                };
+
+                const createResponse = await fetch(`${API_BASE_URL}/auth/create-user`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(userData)
+                });
+
+                if (!createResponse.ok) {
+                    const errorText = await createResponse.text();
+                    throw new Error(`Server error: ${errorText}`);
+                }
+
+                const createResult = await createResponse.json();
+
+                if (createResult.success) {
+                    // Get user_id from created user
+                    const userId = createResult.data.user_id;
+                    
+                    // Create app-user relationship if app_key exists
+                    if (pkceData.app_key) {
+                        const appUserResponse = await fetch(`${API_BASE_URL}/auth/create-app-user`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${createResult.data.jwt_token}`
+                            },
+                            body: JSON.stringify({
+                                email: pkceData.email,
+                                app_key: pkceData.app_key,
+                                user_app_role: pkceData.user_app_role || 'User',
+                                url_redirect: pkceData.url_redirect
+                            })
+                        });
+                        
+                        const appUserResult = await appUserResponse.json();
+                        if (appUserResult.success) {
+                            document.getElementById('result').innerHTML = 
+                                '<div class="success">User account created successfully! Redirecting to login...</div>';
+                            
+                            setTimeout(() => {
+                                window.location.href = `index.html?app_key=${pkceData.app_key}`;
+                            }, 2000);
+                            return;
+                        }
+                    }
+                    
+                    document.getElementById('result').innerHTML = 
+                        '<div class="success">User account created successfully! You can now login with your credentials.</div>';
+                    
+                    // Redirect to login page after 3 seconds
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 3000);
+                } else {
+                    throw new Error(createResult.message || 'Failed to create user account');
+                }
+
+            } catch (error) {
+                console.error('Registration error:', error);
+                document.getElementById('result').innerHTML = 
+                    `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        // Start processing when page loads
+        document.addEventListener('DOMContentLoaded', processRegistration);
+    </script>
+</body>
+</html>

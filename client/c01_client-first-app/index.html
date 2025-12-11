@@ -541,6 +541,36 @@
 
     <script src="./_config.js"></script>                                              <!-- .(51013.01.2 RAM Use this) -->
     <script>
+        // IMMEDIATELY capture URL parameters before any redirects
+        (function() {
+            const currentUrl = window.location.href;
+            const searchParams = window.location.search;
+            console.log('IMMEDIATE CAPTURE - URL:', currentUrl);
+            console.log('IMMEDIATE CAPTURE - Search:', searchParams);
+            
+            if (searchParams) {
+                const params = new URLSearchParams(searchParams);
+                const regKey = params.get('reg_key');
+                const appKey = params.get('app_key');
+                const redirect = params.get('redirect');
+                
+                // Check for reg_key parameter and redirect to register.html
+                if (regKey) {
+                    console.log('FOUND reg_key, redirecting to register.html with full URL');
+                    window.location.href = 'register.html' + window.location.search;
+                    return;
+                }
+                
+                if (appKey) {
+                    sessionStorage.setItem('captured_app_key', appKey);
+                    console.log('CAPTURED app_key:', appKey);
+                }
+                if (redirect) {
+                    sessionStorage.setItem('captured_redirect', redirect);
+                    console.log('CAPTURED redirect:', redirect);
+                }
+            }
+        })();
         // acm_Prompts.js inline
         const ACM_APP_TITLE = 'SecureAccess';
         
@@ -631,9 +661,51 @@
         let SECURE_API_URL = API_BASE_URL;
         
         // Get URLs from query parameters
+        console.log('=== URL PARAMETER DEBUG ===');
+        console.log('Current URL:', window.location.href);
+        console.log('Search params:', window.location.search);
+        console.log('Hash:', window.location.hash);
+        
+        // Check multiple sources for parameters
         const urlParams = new URLSearchParams(window.location.search);
-        const appKey = urlParams.get('app_key');
-        const redirectParam = urlParams.get('redirect');
+        let appKey = urlParams.get('app_key');
+        let redirectParam = urlParams.get('redirect');
+        
+        // Also check if parameters are in hash (in case of redirect)
+        if (!appKey && window.location.hash) {
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            appKey = hashParams.get('app_key');
+            redirectParam = hashParams.get('redirect');
+            console.log('Found params in hash - app_key:', appKey);
+        }
+        
+        // Check sessionStorage for captured/preserved parameters
+        if (!appKey) {
+            appKey = sessionStorage.getItem('captured_app_key') || sessionStorage.getItem('preserved_app_key');
+            console.log('Found app_key in sessionStorage:', appKey);
+        }
+        if (!redirectParam) {
+            redirectParam = sessionStorage.getItem('captured_redirect');
+            console.log('Found redirect in sessionStorage:', redirectParam);
+        }
+        
+        console.log('Final parsed app_key:', appKey);
+        console.log('Final parsed redirect:', redirectParam);
+        console.log('All URL params:', Object.fromEntries(urlParams.entries()));
+        console.log('=== END URL DEBUG ===');
+        
+        // Preserve app_key in sessionStorage if found
+        if (appKey) {
+            sessionStorage.setItem('preserved_app_key', appKey);
+            console.log('Preserved app_key in sessionStorage:', appKey);
+        }
+        
+        // Test function for debugging - can be called from console
+        window.testAppKeyRedirect = function(testAppKey) {
+            console.log('Testing redirect with app_key:', testAppKey);
+            sessionStorage.setItem('preserved_app_key', testAppKey);
+            window.location.href = window.location.origin + window.location.pathname + '?app_key=' + testAppKey;
+        };
         const FailedAttempts = 3;
         
         let applicationData = null;
@@ -772,6 +844,7 @@
                 method,
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
                 },
                 credentials: 'include'
             };
@@ -881,21 +954,36 @@
         }
         
         // Password reset functionality
-        async function showPasswordReset() {
+        function showPasswordReset() {
+            console.log('=== FORGOT PASSWORD DEBUG ===');
             const usernameField = document.getElementById('loginUsername');
-            const username = usernameField ? usernameField.value.trim() : '';
+            console.log('Username field found:', !!usernameField);
+            
+            if (!usernameField) {
+                console.log('Username field not found!');
+                alert('Username field not found. Please refresh the page.');
+                return;
+            }
+            
+            const username = usernameField.value.trim();
+            console.log('Username value:', `"${username}"`);
+            console.log('Username length:', username.length);
             
             if (!username) {
-                if (typeof acm_SecurePopUp === 'function') {
-                    await acm_SecurePopUp("Enter your username or email on the login page, then click the 'Forgot Password?' button.", "OK:ok");
-                } else {
-                    alert("Enter your username or email on the login page, then click the 'Forgot Password?' button.");
-                }
+                console.log('No username entered, showing alert');
+                alert("Please enter your username or email first, then click 'Forgot Password?'");
+                usernameField.focus();
                 return;
             }
             
             // Redirect to forgot password page with username parameter
-            window.location.href = `forgot-password.html?username=${encodeURIComponent(username)}`;
+            const redirectUrl = `forgot-password.html?username=${encodeURIComponent(username)}`;
+            console.log('Redirecting to:', redirectUrl);
+            console.log('Encoded username:', encodeURIComponent(username));
+            console.log('Current location:', window.location.href);
+            
+            // Use window.location.assign for better debugging
+            window.location.assign(redirectUrl);
         }
 
         // Login form handler
@@ -968,8 +1056,10 @@
                     console.log('applicationData exists:', !!applicationData);
                     console.log('applicationData:', applicationData);
                     console.log('redirect_URL field:', applicationData?.redirect_URL);
+                    console.log('parm_PKCE field:', applicationData?.parm_PKCE);
                     console.log('final redirectUrl:', redirectUrl);
                     console.log('redirectUrl not empty:', !!redirectUrl?.trim());
+                    console.log('currentUser:', currentUser);
                     
                     const hasAppKey = !!appKey;
                     const hasAppData = !!applicationData;
@@ -980,11 +1070,20 @@
                     
                     if (hasAppKey && hasAppData && hasRedirectUrl && redirectUrlNotEmpty) {
                         console.log('Redirecting to application URL:', redirectUrl);
-                        const pkceKey = window.createPKCEToken(currentUser);
-                        const params = new URLSearchParams({ pkce: pkceKey });
-                        setTimeout(() => {
-                            window.location.href = `${redirectUrl}?${params.toString()}`;
-                        }, 1000);
+                        console.log('Application parm_PKCE setting:', applicationData.parm_PKCE);
+                        
+                        let finalUrl = redirectUrl;
+                        if (applicationData.parm_PKCE === 'Yes') {
+                            const pkceKey = window.createPKCEToken(currentUser);
+                            const params = new URLSearchParams({ pkce: pkceKey });
+                            finalUrl = `${redirectUrl}?${params.toString()}`;
+                            console.log('Generated PKCE key:', pkceKey);
+                            // Store the PKCE token in localStorage
+                            localStorage.setItem('pkce_token', pkceKey);
+                        }
+                        
+                        console.log('Final redirect URL:', finalUrl);
+                        window.location.href = finalUrl;
                     } else {
                         console.log('=== FALLBACK TO APP-LAUNCH ===');
                         console.log('Reason: Failed condition check');
@@ -1002,9 +1101,7 @@
 
                         
                         // Default: redirect all users to app-launch.html
-                        setTimeout(() => {
-                            window.location.href = 'app-launch.html';
-                        }, 1000);
+                        window.location.href = 'app-launch.html';
                     }
                 }
 

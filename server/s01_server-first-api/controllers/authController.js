@@ -295,6 +295,200 @@ const verifyToken = async (token, userId) => {
   }
 };
 
+// Check if email exists
+const checkEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+    
+    const query = 'SELECT COUNT(*) as count FROM sa_users WHERE email = ?';
+    const [rows] = await pool.execute(query, [email]);
+    
+    res.json({
+      success: true,
+      exists: rows[0].count > 0
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error checking email',
+      error: error.message
+    });
+  }
+};
+
+// Create new user
+const createUser = async (req, res) => {
+  try {
+    const {
+      first_name,
+      last_name,
+      email,
+      account_status,
+      master_password_hash,
+      security_question_1,
+      security_question_2,
+      security_answer_1_hash,
+      security_answer_2_hash,
+      two_factor_secret,
+      jwt_secret_version,
+      refresh_token_rotation_enabled,
+      token_expiration_minutes,
+      role
+    } = req.body;
+    
+    // Generate username from email
+    const username = email.split('@')[0];
+    
+    // Generate salt for password
+    const salt = await bcrypt.genSalt(10);
+    
+    const query = `
+      INSERT INTO sa_users (
+        first_name, last_name, username, email, account_status,
+        master_password_hash, salt, security_question_1, security_question_2,
+        security_answer_1_hash, security_answer_2_hash, two_factor_secret,
+        jwt_secret_version, refresh_token_rotation_enabled,
+        token_expiration_minutes, role, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    `;
+    
+    const [result] = await pool.execute(query, [
+      first_name,
+      last_name,
+      username,
+      email,
+      account_status,
+      master_password_hash,
+      salt,
+      security_question_1,
+      security_question_2,
+      security_answer_1_hash,
+      security_answer_2_hash,
+      two_factor_secret,
+      jwt_secret_version,
+      refresh_token_rotation_enabled,
+      token_expiration_minutes,
+      role
+    ]);
+    
+    // Generate JWT token for the new user
+    const tokenPayload = {
+      userId: result.insertId,
+      username: username,
+      email: email,
+      role: role
+    };
+    
+    const token = jwt.sign(
+      tokenPayload,
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '1h' }
+    );
+    
+    res.json({
+      success: true,
+      message: 'User created successfully',
+      data: {
+        user_id: result.insertId,
+        username: username,
+        email: email,
+        jwt_token: token
+      }
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error creating user',
+      error: error.message
+    });
+  }
+};
+
+// Create app-user relationship
+const createAppUser = async (req, res) => {
+  try {
+    const { email, app_key, user_app_role, url_redirect } = req.body;
+    
+    // Get user_id from email
+    const userQuery = 'SELECT user_id, first_name, last_name, username FROM sa_users WHERE email = ?';
+    const [userRows] = await pool.execute(userQuery, [email]);
+    
+    if (userRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    const user = userRows[0];
+    
+    // Get application data including URLs
+    const appQuery = 'SELECT application_id, redirect_URL, failure_URL FROM sa_applications WHERE app_key = ?';
+    const [appRows] = await pool.execute(appQuery, [app_key]);
+    
+    if (appRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found'
+      });
+    }
+    
+    const app = appRows[0];
+    
+    // Create sa_app_user record
+    const insertQuery = `
+      INSERT INTO sa_app_user (application_id, user_id, status, track_user, app_role, created_at)
+      VALUES (?, ?, 'Active', 'No', ?, NOW())
+    `;
+    
+    await pool.execute(insertQuery, [app.application_id, user.user_id, user_app_role]);
+    
+    // Determine redirect URL based on url_redirect field
+    let redirectUrl;
+    if (url_redirect === 'redirect_URL') {
+      redirectUrl = app.redirect_URL;
+      // Build PKCE token for redirect_URL
+      if (redirectUrl) {
+        const userData = {
+          user_id: user.user_id,
+          username: user.username,
+          email: email,
+          first_name: user.first_name,
+          last_name: user.last_name
+        };
+        const pkceToken = Buffer.from(JSON.stringify(userData)).toString('base64');
+        redirectUrl += (redirectUrl.includes('?') ? '&' : '?') + `pkce=${pkceToken}`;
+      }
+    } else if (url_redirect === 'failure_URL') {
+      redirectUrl = app.failure_URL;
+    }
+    
+    res.json({
+      success: true,
+      message: 'App-user relationship created successfully',
+      data: {
+        redirect_url: redirectUrl
+      }
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error creating app-user relationship',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   login,
   verifyTokenEndpoint,
@@ -302,5 +496,8 @@ module.exports = {
   passwordReset,
   logout,
   refreshToken,
-  verifyToken
+  verifyToken,
+  checkEmail,
+  createUser,
+  createAppUser
 };

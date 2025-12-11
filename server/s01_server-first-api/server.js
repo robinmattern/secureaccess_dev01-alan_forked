@@ -1468,7 +1468,7 @@ app.post('/api/auth/login', rateLimitLogin, async (req, res) => {
         
         // Find user by username or email
         const [users] = await pool.execute(
-            'SELECT * FROM sa_users WHERE username = ? OR email = ?',
+            'SELECT user_id, first_name, last_name, username, email, account_status, two_factor_enabled, last_login_timestamp, master_password_hash, role FROM sa_users WHERE username = ? OR email = ?',
             [username, username]
         );
         
@@ -1484,7 +1484,7 @@ app.post('/api/auth/login', rateLimitLogin, async (req, res) => {
         console.log(`✅ User found: ${user.username}`);
         
         // Verify password
-        const passwordValid = await verifyPassword(password, user.master_password_hash);
+        const passwordValid = await bcrypt.compare(password, user.master_password_hash);
         
         if (!passwordValid) {
             console.log(`❌ Invalid password for user: ${username}`);
@@ -1760,6 +1760,86 @@ app.get('/api/auth/verify', verifyToken, async (req, res) => {
             success: false,
             message: 'Authentication verification failed'
         });
+    }
+});
+
+// Auth routes are handled directly in server.js
+
+// Check if email exists
+app.post('/api/auth/check-email', async (req, res) => {
+    try {
+        const { email } = req.body;
+        const [rows] = await pool.execute('SELECT COUNT(*) as count FROM sa_users WHERE email = ?', [email]);
+        res.json({ success: true, exists: rows[0].count > 0 });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error checking email' });
+    }
+});
+
+// Create new user from PKCE token
+app.post('/api/auth/create-user', async (req, res) => {
+    try {
+        const { first_name, last_name, email, account_status, master_password_hash, security_question_1, security_question_2, security_answer_1_hash, security_answer_2_hash, role } = req.body;
+        
+        const username = email.split('@')[0];
+        const hashedPassword = await hashPassword(master_password_hash);
+        
+        const [result] = await pool.execute(`
+            INSERT INTO sa_users (first_name, last_name, username, email, account_status, master_password_hash, security_question_1, security_question_2, security_answer_1_hash, security_answer_2_hash, role)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [first_name, last_name, username, email, account_status, hashedPassword, security_question_1, security_question_2, security_answer_1_hash, security_answer_2_hash, role]);
+        
+        // Explicitly update account_status to ensure it's set to active
+        await pool.execute('UPDATE sa_users SET account_status = ? WHERE user_id = ?', ['active', result.insertId]);
+        
+        const token = jwt.sign({ userId: result.insertId, username, email, role }, JWT_SECRET, { expiresIn: '1h' });
+        
+        res.json({ success: true, message: 'User created successfully', data: { user_id: result.insertId, username, email, jwt_token: token } });
+    } catch (error) {
+        console.error('Create user error:', error);
+        res.status(500).json({ success: false, message: 'Error creating user', error: error.message });
+    }
+});
+
+// Create app-user relationship
+app.post('/api/auth/create-app-user', verifyToken, async (req, res) => {
+    try {
+        console.log('Create app-user request:', req.body);
+        const { email, app_key, user_app_role, url_redirect } = req.body;
+        
+        const [userRows] = await pool.execute('SELECT user_id, first_name, last_name, username FROM sa_users WHERE email = ?', [email]);
+        if (userRows.length === 0) {
+            console.log('User not found for email:', email);
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        
+        const user = userRows[0];
+        console.log('Found user:', user);
+        
+        const [appRows] = await pool.execute('SELECT application_id, redirect_URL, failure_URL FROM sa_applications WHERE app_key = ?', [app_key]);
+        if (appRows.length === 0) {
+            console.log('Application not found for app_key:', app_key);
+            return res.status(404).json({ success: false, message: 'Application not found' });
+        }
+        
+        const app = appRows[0];
+        console.log('Found application:', app);
+        
+        console.log('Inserting sa_app_user record:', { application_id: app.application_id, user_id: user.user_id });
+        await pool.execute('INSERT INTO sa_app_user (application_id, user_id, status, track_user, app_role) VALUES (?, ?, "Active", "No", "Member")', [app.application_id, user.user_id]);
+        console.log('sa_app_user record created successfully');
+        
+        let redirectUrl = url_redirect === 'redirect_URL' ? app.redirect_URL : app.failure_URL;
+        if (url_redirect === 'redirect_URL' && redirectUrl) {
+            const userData = { user_id: user.user_id, username: user.username, email, first_name: user.first_name, last_name: user.last_name };
+            const pkceToken = Buffer.from(JSON.stringify(userData)).toString('base64');
+            redirectUrl += (redirectUrl.includes('?') ? '&' : '?') + `pkce=${pkceToken}`;
+        }
+        
+        res.json({ success: true, message: 'App-user relationship created successfully', data: { redirect_url: redirectUrl } });
+    } catch (error) {
+        console.error('Create app-user error:', error);
+        res.status(500).json({ success: false, message: 'Error creating app-user relationship', error: error.message });
     }
 });
 

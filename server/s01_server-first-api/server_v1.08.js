@@ -8,11 +8,11 @@ const validator = require('validator');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 55351;
+const PORT = process.env.PORT || 54333;
 
 // Middleware
 app.use(cors({
-    origin: ['http://localhost:55351', 'http://127.0.0.1:55301', 'http://localhost:55301', 'http://127.0.0.1:8080', 'http://localhost:5500', 'http://127.0.0.1:5500', 'http://localhost:5501', 'http://127.0.0.1:5501'],
+    origin: ['http://localhost:54333', 'http://127.0.0.1:8080', 'http://localhost:54383',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id', 'x-session-id', 'x-requested-with', 'x-csrf-token'],
     credentials: true

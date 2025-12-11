@@ -3,8 +3,8 @@
 echo "🚀 Starting Web Application..."
 
 # Read ports from _config.js
-FRONTEND_PORT=55301
-BACKEND_PORT=55351
+FRONTEND_PORT=54333   #55351
+BACKEND_PORT=54383    #55351
 if [ -f "client/c01_client-first-app/config/app.json" ]; then
     FRONTEND_PORT=$(grep -o '"frontend":[[:space:]]*[0-9]*' client/c01_client-first-app/config/app.json | grep -o '[0-9]*' || echo 54000)
     BACKEND_PORT=$(grep -o '"backend":[[:space:]]*[0-9]*' client/c01_client-first-app/config/app.json | grep -o '[0-9]*' || echo 54001)
