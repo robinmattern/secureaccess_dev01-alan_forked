@@ -1,6 +1,11 @@
 {
     "folders": [
-        {   "name": "SAS_dev01-alan",
+        {
+            "name": "._",
+            "path": "../._"
+        },
+        {
+            "name": "SAS_dev01-alan",
             "path": "."
         }
     ],
