@@ -1,0 +1,13 @@
+/* SAS_/dev01-alan/SAS_c55301.json */
+{
+  "apps":
+   [ { "cwd"        :   "/home/shared/repos/SAS_/dev01-alan"
+     , "name"       :   "SAS_c55301.json"
+     , "script"     :   "live-server"
+     , "args"       :   "client/c01_client-first-app --port=55301 --host=0.0.0.0"
+     , "watch"      : [ "client/c01_client-first-app/" ]
+     , "out_file"   :   "/home/shared/repos/IODD_/._/LOGs/2512.Dec/SAS_c55301_out.log"
+     , "error_file" :   "/home/shared/repos/IODD_/._/LOGs/2512.Dec/SAS_c55301_err.log"
+        }
+     ]
+   }

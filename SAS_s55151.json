@@ -1,0 +1,13 @@
+/* SAS_/dev01-alan/SAS_s55151.json */
+{
+  "apps":
+   [ { "cwd"        :   "/home/shared/repos/SAS_/dev01-alan"
+     , "name"       :   "SAS_s55151"
+     , "script"     :   "/root/.nvs/node/20.17.0/x64/bin/node"
+     , "args"       :   "server/s01_server-first-api"
+     , "watch"      : [ "server/s01_server-first-api/" ]
+     , "out_file"   :   "/home/shared/repos/IODD_/._/LOGs/2512.Dec/SAS_s55151_out.log"
+     , "error_file" :   "/home/shared/repos/IODD_/._/LOGs/2512.Dec/SAS_s55151_err.log"
+        }
+     ]
+   }
