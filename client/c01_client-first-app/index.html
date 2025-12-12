@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -717,10 +717,6 @@
         let authToken = null;
         let failedLoginAttempts = 0;
 
-
-
-
-
         // User popup functions
         function showUserPopup() {
             const popup = document.getElementById('userPopup');
@@ -1223,7 +1219,7 @@
             }
 
             // Check server connection
-            fetch(`${API_BASE_URL.replace('/api', '')}/health`)
+            await fetch(`${API_BASE_URL.replace('/api', '')}/health`)                    // .(51211.05.1 RAM Added await)
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'OK') {
