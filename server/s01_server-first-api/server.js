@@ -27,8 +27,8 @@ const DB_LOCATION      = process.FVARS.DB_LOCATION || process.env.DB_LOCATION   
       process.exit()
       }  }                                                                              // .(51112.03.5 End)
    if (DB_LOCATION == "Remote") {
-      process.env.PORT = process.FVARS.SERVER_PORT                                      // .(51211.07.1 RAM Define them here)
-      process.env.HOST = process.FVARS.SECURE_HOST                                      // .(51211.07.2)
+      process.env.PORT = process.FVARS.SERVER_PORT                                      // .(51211.07.1 RAM Define them here) 
+      process.env.HOST = process.FVARS.SECURE_HOST                                      // .(51211.07.2) 
       console.log( `process.env: {` )
       console.log( `  "PORT":             "${process.env.PORT}"` )
       console.log( `  "HOST":             "${process.env.HOST}"` )
@@ -119,10 +119,10 @@ const app = express();
 const PORT        =  process.env.PORT // || 3005;
 const NODE_ENV    =  process.env.NODE_ENV || 'development';
 const HOST        =  NODE_ENV === 'production' ? process.env.PRODUCTION_HOST : process.env.HOST;            // .(51013.03.1 RAM PRODUCTION_HOST is not defined)
-//nst BASE_URL    = `http${NODE_ENV === 'production' ? 's' : ''}://${HOST}:${PORT}`;                        //#.(51013.03.2).(51211.07.3)
-//nst BASE_URL    =  HOST.match( /secureaccess/i ) ? `${HOST}`:`${HOST}:${PORT}`;                           //#.(51211.07.3).(51211.07b.1)
-const BASE_URL    =  HOST.match( /secureaccess/i ) ? `${HOST}`:`${HOST.replace( `:${PORT}`, '' )}:${PORT}`; // .(51211.07b.1).(51211.07.3)
-const SECURE_PATH =  process.FVARS.SECURE_PATH || ''                                                        // .(51211.07.4 RAM Was ??).(51013.04.17 RAM HOST includes http or https)
+//nst BASE_URL    = `http${NODE_ENV === 'production' ? 's' : ''}://${HOST}:${PORT}`;                        //#.(51013.03.2).(51211.07.3) 
+//nst BASE_URL    =  HOST.match( /secureaccess/i ) ? `${HOST}`:`${HOST}:${PORT}`;                           //#.(51211.07.3).(51211.07b.1) 
+const BASE_URL    =  HOST.match( /secureaccess/i ) ? `${HOST}`:`${HOST.replace( `:${PORT}`, '' )}:${PORT}`; // .(51211.07b.1).(51211.07.3) 
+const SECURE_PATH =  process.FVARS.SECURE_PATH || ''                                                        // .(51211.07.4 RAM Was ??).(51013.04.17 RAM HOST includes http or https) 
 
 // JWT Secret - In production, use environment variable
 const JWT_SECRET = process.env.JWT_SECRET || 'SecureAccess-JWT-Secret-Key-2024!@#$%';

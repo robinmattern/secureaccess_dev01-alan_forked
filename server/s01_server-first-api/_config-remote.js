@@ -15,16 +15,15 @@ var _FVARS = {
     "REMOTE_API_URL":       "https://secureaccess247.com/api",
     "SERVER_LOCATION":      "Local",
 
-    "SECURE_HOST":          "http://localhost:55351",
-    "SECURE_API_URL":       "http://localhost:55351/api",
-    "SECURE_PATH":          "http://localhost:55351/api",
-//  "SECURE_HOST":          "https://secureaccess247.com",
-//  "SECURE_API_URL":       "https://secureaccess247.com/api",
-//  "SECURE_PATH":          "https://secureaccess247.com",
+//  "SECURE_HOST":          "http://92.112.184.206:55351",
+//  "SECURE_API_URL":       "http://92.112.184.206:55351/api",
+    "SECURE_HOST":          "https://secureaccess247.com",
+    "SECURE_API_URL":       "https://secureaccess247.com/api",
+    "SECURE_PATH":          "https://secureaccess247.com",
 
     "CORS_ORIGINS": [
-      "http://localhost:55301",
-//    "https://secureaccess247.com",
+//    "http://92.112.184.206:55301",
+      "https://secureaccess247.com",
        ]
      }
   if (typeof(window)  != 'undefined') {  window.FVARS  = _FVARS; var aGlobal = "window"  }
