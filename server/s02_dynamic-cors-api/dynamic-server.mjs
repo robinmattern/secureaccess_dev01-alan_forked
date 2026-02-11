@@ -46,8 +46,23 @@ app.use(cors({
     const db = await CorsDB.load();
     const allowed = !origin || db.allowedOrigins.includes(origin);
     callback(null, allowed);
-  }
+  },
+  credentials: true
 }));
+
+// CSRF protection middleware
+function csrfProtection(req, res, next) {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
+    return next();
+  }
+  
+  const token = req.headers['x-requested-with'];
+  if (!token || token !== 'XMLHttpRequest') {
+    return res.status(403).json({ error: 'Invalid request' });
+  }
+  
+  next();
+}
 
 // CORS management API
 app.get('/cors/origins', async (req, res) => {
@@ -55,12 +70,12 @@ app.get('/cors/origins', async (req, res) => {
   res.json(db);
 });
 
-app.post('/cors/origins', async (req, res) => {
+app.post('/cors/origins', csrfProtection, async (req, res) => {
   const origins = await CorsDB.addOrigin(req.body.origin);
   res.json({ allowedOrigins: origins });
 });
 
-app.delete('/cors/origins', async (req, res) => {
+app.delete('/cors/origins', csrfProtection, async (req, res) => {
   const origins = await CorsDB.removeOrigin(req.body.origin);
   res.json({ allowedOrigins: origins });
 });

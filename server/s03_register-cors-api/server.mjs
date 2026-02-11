@@ -3,6 +3,7 @@
   import   fs      from 'fs/promises';
   import   crypto  from 'crypto';
   import   path    from 'path';
+  import   csrf    from 'csurf';
   import { initFVARS } from './setFVARS.mjs';
 
 // Initialize FVARS
@@ -14,36 +15,103 @@
 
   const REGISTRY_FILE   = path.join( pFVARS.DATA_PATH, 'api-registry.json');
 
-        console.log( '  Server starting on port:', PORT);
+        console.log( '  Server starting on port:', SERVER_PORT);
         console.log( '  Registry file:          ', REGISTRY_FILE);
         console.log( "  CORS_Origins:           ", CORS_ORIGINS.join('\n     '))
-process.exit() 
+
   const app   =  express();
         app.use( express.json() );
         app.use( cors({ origin: CORS_ORIGINS }));
 
+// CSRF Protection
+const csrfProtection = csrf({
+    cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: '/'
+    },
+    ignoreMethods: ['GET', 'HEAD', 'OPTIONS']
+});
+
 class APIRegistry {
+  static apiKeyIndex = new Map();
+  
   static async load() {
     try {
       console.log('Trying to read:', REGISTRY_FILE);
       const data = await fs.readFile(REGISTRY_FILE, 'utf8');
       console.log('File loaded successfully');
-      return JSON.parse(data);
+      const registry = JSON.parse(data);
+      
+      // Build API key index for O(1) lookups
+      this.apiKeyIndex.clear();
+      for (const [userId, user] of Object.entries(registry.users || {})) {
+        if (user.apiKey) {
+          this.apiKeyIndex.set(user.apiKey, user);
+        }
+      }
+      
+      return registry;
     } catch (error) {
       console.log('File read error:', error.message);
+      this.apiKeyIndex.clear();
       return { users: {}, apiApps: {} };
     }
   }
 
   static async save(registry) {
-    console.log('Saving to:', REGISTRY_FILE);
-    await fs.writeFile(REGISTRY_FILE, JSON.stringify(registry, null, 2));
+    try {
+      console.log('Saving to:', REGISTRY_FILE);
+      await fs.writeFile(REGISTRY_FILE, JSON.stringify(registry, null, 2));
+      
+      // Update API key index
+      this.apiKeyIndex.clear();
+      for (const [userId, user] of Object.entries(registry.users || {})) {
+        if (user.apiKey) {
+          this.apiKeyIndex.set(user.apiKey, user);
+        }
+      }
+    } catch (error) {
+      console.error('Error saving registry:', error.message);
+      throw error;
+    }
   }
 }
 
+// Admin authentication middleware
+const ADMIN_KEY = process.env.ADMIN_API_KEY || crypto.randomBytes(32).toString('hex');
+if (!process.env.ADMIN_API_KEY) {
+  console.warn('⚠️  ADMIN_API_KEY not set. Generated temporary key: ' + ADMIN_KEY.substring(0, 8) + '...');
+}
+
+function requireAdmin(req, res, next) {
+  const adminKey = req.headers['x-admin-key'];
+  if (!adminKey || adminKey.length !== ADMIN_KEY.length) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  const match = crypto.timingSafeEqual(
+    Buffer.from(adminKey),
+    Buffer.from(ADMIN_KEY)
+  );
+  
+  if (!match) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  next();
+}
+
 // Register new user with API key
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', csrfProtection, requireAdmin, async (req, res) => {
   const { userId, allowedOrigins, allowedApis } = req.body;
+  
+  // Prevent prototype pollution
+  if (!userId || typeof userId !== 'string' || ['__proto__', 'constructor', 'prototype'].includes(userId)) {
+    return res.status(400).json({ error: 'Invalid userId' });
+  }
+  
   const registry = await APIRegistry.load();
   
   const apiKey = `key_${crypto.randomBytes(16).toString('hex')}`;
@@ -61,15 +129,26 @@ app.post('/api/register', async (req, res) => {
 });
 
 // Get all users
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', requireAdmin, async (req, res) => {
   const registry = await APIRegistry.load();
   res.json(registry.users);
 });
 
 // Update user origins
-app.put('/api/users/:userId/origins', async (req, res) => {
+app.put('/api/users/:userId/origins', csrfProtection, requireAdmin, async (req, res) => {
   const { userId } = req.params;
   const { origins } = req.body;
+  
+  // Prevent prototype pollution
+  if (!userId || typeof userId !== 'string' || ['__proto__', 'constructor', 'prototype'].includes(userId)) {
+    return res.status(400).json({ error: 'Invalid userId' });
+  }
+  
+  // Validate origins is an array
+  if (!Array.isArray(origins)) {
+    return res.status(400).json({ error: 'Origins must be an array' });
+  }
+  
   const registry = await APIRegistry.load();
   
   if (registry.users[userId]) {
@@ -82,9 +161,19 @@ app.put('/api/users/:userId/origins', async (req, res) => {
 });
 
 // Delete user
-app.delete('/api/users/:userId', async (req, res) => {
+app.delete('/api/users/:userId', csrfProtection, requireAdmin, async (req, res) => {
   const { userId } = req.params;
+  
+  // Prevent prototype pollution
+  if (!userId || typeof userId !== 'string' || ['__proto__', 'constructor', 'prototype'].includes(userId)) {
+    return res.status(400).json({ error: 'Invalid userId' });
+  }
+  
   const registry = await APIRegistry.load();
+  
+  if (!registry.users[userId]) {
+    return res.status(404).json({ error: 'User not found' });
+  }
   
   delete registry.users[userId];
   await APIRegistry.save(registry);
@@ -104,9 +193,10 @@ app.get('/api/validate', async (req, res) => {
     });
   }
   
-  const registry = await APIRegistry.load();
-  console.log('Available API keys:', Object.values(registry.users).map(u => u.apiKey));
-  const user = Object.values(registry.users).find(u => u.apiKey === apiKey);
+  await APIRegistry.load();
+  
+  // Use O(1) index lookup instead of O(n) linear search
+  const user = APIRegistry.apiKeyIndex.get(apiKey);
   
   if (!user || !user.active) {
     return res.json({ valid: false, error: 'Invalid or inactive API key' });
@@ -127,6 +217,6 @@ app.get('*', async (req, res) => {
   res.send( `<br>Use http://localhost:${PORT}/api` )
 });
 */
-app.listen(PORT, () => {
+app.listen(SERVER_PORT, () => {
   console.log(`CORS Registration API running on ${SERVER_API_URL}`);
 });

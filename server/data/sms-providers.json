@@ -1,0 +1,52 @@
+{
+  "providers": [
+    {
+      "name": "Verizon",
+      "domain": "vtext.com"
+    },
+    {
+      "name": "AT&T",
+      "domain": "txt.att.net"
+    },
+    {
+      "name": "T-Mobile",
+      "domain": "tmomail.net"
+    },
+    {
+      "name": "Sprint (now T-Mobile)",
+      "domain": "messaging.sprintpcs.com"
+    },
+    {
+      "name": "Sprint (now T-Mobile) - Alternative",
+      "domain": "pm.sprint.com"
+    },
+    {
+      "name": "US Cellular",
+      "domain": "email.uscc.net"
+    },
+    {
+      "name": "Boost Mobile",
+      "domain": "sms.myboostmobile.com"
+    },
+    {
+      "name": "Cricket Wireless",
+      "domain": "mms.cricketwireless.net"
+    },
+    {
+      "name": "Metro PCS (T-Mobile)",
+      "domain": "mymetropcs.com"
+    },
+    {
+      "name": "Virgin Mobile",
+      "domain": "vmobl.com"
+    },
+    {
+      "name": "Xfinity Mobile",
+      "domain": "vtext.com"
+    },
+    {
+      "name": "Google Fi",
+      "domain": "msg.fi.google.com"
+    }
+  ]
+}

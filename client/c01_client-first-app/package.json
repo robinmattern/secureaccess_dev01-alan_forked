@@ -1,6 +1,7 @@
 {
-  "name": "secureaccess_client-apps",
+  "name": "@secureaccess/client-apps",
   "version": "1.0.0",
+  "private": true,
   "description": "Client applications",
   "scripts": {
     "start":     "live-server --port=57301 --no-browser",

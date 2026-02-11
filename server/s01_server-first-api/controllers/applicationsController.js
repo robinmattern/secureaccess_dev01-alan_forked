@@ -1,5 +1,6 @@
-const { pool } = require('../database');
 const Joi = require('joi');
+const { handleError } = require('../utils/errorHandler');
+const { pool } = require('../database');
 
 // Validation schema
 const applicationIdSchema = Joi.string().required();
@@ -40,12 +41,7 @@ const getApplicationById = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error fetching application:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch application information',
-      error: error.message
-    });
+    handleError(error, res, 'fetch application');
   }
 };
 
@@ -67,11 +63,7 @@ const getAllApplications = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error fetching applications:', error?.message || 'Unknown error');
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch applications'
-    });
+    handleError(error, res, 'fetch applications');
   }
 };
 
@@ -117,20 +109,13 @@ const createApplication = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error creating application:', error);
-    
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({
         success: false,
         message: 'Application name already exists'
       });
     }
-    
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create application',
-      error: error.message
-    });
+    handleError(error, res, 'create application');
   }
 };
 
@@ -153,12 +138,7 @@ const getUserApplications = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error fetching user applications:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch user applications',
-      error: error.message
-    });
+    handleError(error, res, 'fetch user applications');
   }
 };
 

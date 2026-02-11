@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2-Factor Authentication - SecureAccess</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 24px; margin-bottom: 8px; }
+        .header p { font-size: 16px; opacity: 0.9; }
+        .content { padding: 30px; }
+        .user-name { font-size: 20px; font-weight: 600; margin-bottom: 20px; color: #333; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 14px; color: #333; }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .form-group select.small { width: 80px; }
+        .form-group input:disabled { background: #f8f9fa; color: #6c757d; }
+        .button-group { display: flex; gap: 10px; margin-top: 25px; flex-wrap: wrap; }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary:hover { background: #5a6268; }
+        .btn-warning { background: #ffc107; color: #000; }
+        .btn-warning:hover { background: #e0a800; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>2-Factor Authentication</h1>
+            <p>Configure 2FA settings for user</p>
+        </div>
+        <div class="content">
+            <div class="user-name" id="userName">Loading...</div>
+            
+            <div class="form-group">
+                <label>2FA Enabled</label>
+                <select id="twoFactorEnabled" class="small">
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>2FA Email</label>
+                <input type="email" id="twoFactorEmail" placeholder="Enter email for 2FA codes">
+            </div>
+            
+            <div class="form-group">
+                <label>2FA Verified</label>
+                <select id="twoFactorVerified" class="small">
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                </select>
+            </div>
+            
+            <div class="button-group">
+                <button class="btn btn-primary" onclick="saveChanges()">Save</button>
+                <button class="btn btn-primary" onclick="testSMTP()">Test</button>
+                <button class="btn btn-primary" onclick="generateBackupCodes()">Backup Codes</button>
+                <button class="btn btn-primary" onclick="returnToUsers()">Return</button>
+            </div>
+        </div>
+    </div>
+    <script src="./_config.js"></script>
+    <script src="./lib/acm_Prompts.js"></script>
+    <script src="admin-user-2f.js"></script>
+</body>
+</html>

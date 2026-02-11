@@ -9,6 +9,11 @@ const cookieParser = require('cookie-parser');
 const csrf = require('csurf');
 const crypto = require('crypto');
 const validator = require('validator');
+const security = require('./middleware/security');
+const redis = require('redis');
+const { handleError, safeJsonParse } = require('./utils/errorHandler');
+const fs = require('fs').promises;
+const nodemailer = require('nodemailer');
 
              require( "./_config.js" )                                                  // .(51013.01.3 RAM Load process.fvaR)
 //    dotenv.config( { path:       `${ __dirname }/.env`) } );                          //#.(51013.01.3 RAM No workie in windows)
@@ -16,8 +21,8 @@ const validator = require('validator');
   if (bOK.error) { console.error('❌ Missing .env file, using defaults'); }             // .(51112.04.2 RAM Warn if not found)
                                                                                         // .(51013.04.13 RAM This works everywhere)
 const SECURE_API_URL   = process.FVARS.SERVER_API_URL || ''                             // .(51013.04.14 RAM not SECURE_PATH)
-      process.env.PORT = SECURE_API_URL.match(   /:([0-9]+)\/?/)?.slice(1,2)[0] ?? ''   // .(51013.04.15 RAM Define them here)
-      process.env.HOST = SECURE_API_URL.match(/(.+):[0-9]+\/?/ )?.slice(1,2)[0] ?? ''   // .(51013.04.16)
+      process.env.PORT = SECURE_API_URL.match(   /:([0-9]+)\/?/)?.slice(1,2)[0] || process.env.PORT || '3000'   // .(51013.04.15 RAM Define them here)
+      process.env.HOST = SECURE_API_URL.match(/(.+):[0-9]+\/?/ )?.slice(1,2)[0] || process.env.HOST || 'http://localhost'   // .(51013.04.16)
 
 const DB_LOCATION      = process.FVARS.DB_LOCATION || process.env.DB_LOCATION           // .(51112.04.3 RAM Check if DB_LOCATION has changed Beg)
   if (DB_LOCATION     != process.env.DB_LOCATION) {
@@ -27,8 +32,8 @@ const DB_LOCATION      = process.FVARS.DB_LOCATION || process.env.DB_LOCATION   
       process.exit()
       }  }                                                                              // .(51112.03.5 End)
    if (DB_LOCATION == "Remote") {
-      process.env.PORT = process.FVARS.SERVER_PORT                                      // .(51211.07.1 RAM Define them here) 
-      process.env.HOST = process.FVARS.SECURE_HOST                                      // .(51211.07.2) 
+      process.env.PORT = process.FVARS.SERVER_PORT || process.env.PORT || '3000'                                      // .(51211.07.1 RAM Define them here) 
+      process.env.HOST = process.FVARS.SECURE_HOST || process.env.HOST || 'http://localhost'                                      // .(51211.07.2) 
       console.log( `process.env: {` )
       console.log( `  "PORT":             "${process.env.PORT}"` )
       console.log( `  "HOST":             "${process.env.HOST}"` )
@@ -39,9 +44,9 @@ const DB_LOCATION      = process.FVARS.DB_LOCATION || process.env.DB_LOCATION   
     console.log('ℹ️  Environment variables loaded:');
 //  console.log('   PORT:',       process.env.PORT);
 //  console.log('   HOST:',       process.env.HOST);
-    console.log('   DB_HOST:',    process.env.DB_HOST);
-    console.log('   DB_NAME:',    process.env.DB_NAME);
-    console.log('   DB_USER:',    process.env.DB_USER);
+    console.log('   DB_HOST:',    process.env.DB_HOST ? '[SET]' : '[NOT SET]');
+    console.log('   DB_NAME:',    process.env.DB_NAME ? '[SET]' : '[NOT SET]');
+    console.log('   DB_USER:',    process.env.DB_USER ? '[SET]' : '[NOT SET]');
     console.log('   JWT_SECRET:', process.env.JWT_SECRET ? '[SET]' : '[NOT SET]');
 
 
@@ -53,15 +58,214 @@ function generateSecureRandomToken() {
 // Rate limiting store with cleanup
 const loginAttempts = new Map();
 
-// Cleanup expired rate limit entries every 5 minutes
-setInterval(() => {
+// 2FA code store (in-memory, expires after 10 minutes)
+const twoFactorCodes = new Map();
+
+// 2FA attempt tracking (rate limiting)
+const twoFactorAttempts = new Map();
+
+// SMTP config cache (to avoid reading file on every 2FA request)
+let smtpConfigCache = null;
+let smtpConfigCacheTime = 0;
+const SMTP_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Load SMTP configuration with caching
+async function loadSmtpConfig() {
     const now = Date.now();
-    for (const [ip, data] of loginAttempts.entries()) {
-        if (now > data.resetTime) {
-            loginAttempts.delete(ip);
+    if (smtpConfigCache && (now - smtpConfigCacheTime) < SMTP_CACHE_TTL) {
+        return smtpConfigCache;
+    }
+    
+    const smtpPath = path.join(__dirname, '.env.SMTP');
+    const smtpContent = await fs.readFile(smtpPath, 'utf8');
+    const lines = smtpContent.split('\n');
+    const config = {};
+    const maxLines = 50;
+    const lineCount = Math.min(lines.length, maxLines);
+    for (let i = 0; i < lineCount; i++) {
+        const match = lines[i].match(/^([A-Z_]+)=(.+)$/);
+        if (match) config[match[1]] = match[2].replace(/"/g, '');
+    }
+    
+    smtpConfigCache = config;
+    smtpConfigCacheTime = now;
+    return config;
+}
+
+// Redis client for 2FA storage (with fallback to in-memory)
+let redisClient = null;
+let useRedis = false;
+
+// Initialize Redis connection
+async function initRedis() {
+    if (process.env.REDIS_ENABLED === 'true') {
+        try {
+            const redisPort = parseInt(process.env.REDIS_PORT);
+            if (isNaN(redisPort) || redisPort < 1 || redisPort > 65535) {
+                throw new Error('Invalid Redis port');
+            }
+            redisClient = redis.createClient({
+                socket: {
+                    host: process.env.REDIS_HOST || 'localhost',
+                    port: redisPort || 6379
+                },
+                password: process.env.REDIS_PASSWORD || undefined
+            });
+            
+            redisClient.on('error', (err) => {
+                const errorMessage = err && err.message ? err.message : 'Unknown Redis error';
+                console.error('❌ Redis error:', errorMessage);
+                useRedis = false;
+            });
+            
+            await redisClient.connect();
+            useRedis = true;
+            console.log('✅ Redis connected - using Redis for 2FA storage');
+        } catch (error) {
+            const errorMessage = error && error.message ? error.message : 'Unknown error';
+            console.warn('⚠️  Redis not available, using in-memory storage:', errorMessage);
+            useRedis = false;
+        }
+    } else {
+        console.log('ℹ️  Redis disabled - using in-memory storage for 2FA');
+    }
+}
+
+// 2FA Storage Helper Functions
+const twoFactorStorage = {
+    async set(key, value, expiresInSeconds) {
+        if (useRedis && redisClient) {
+            try {
+                await redisClient.setEx(`2fa:${key}`, expiresInSeconds, JSON.stringify(value));
+            } catch (error) {
+                const errorMessage = error && error.message ? error.message : 'Unknown error';
+                console.error('Redis set error:', errorMessage);
+                twoFactorCodes.set(key, { ...value, expiresAt: Date.now() + (expiresInSeconds * 1000) });
+            }
+        } else {
+            twoFactorCodes.set(key, { ...value, expiresAt: Date.now() + (expiresInSeconds * 1000) });
+        }
+    },
+    
+    async get(key) {
+        if (useRedis && redisClient) {
+            try {
+                const data = await redisClient.get(`2fa:${key}`);
+                if (!data) return null;
+                
+                let parsed;
+                try {
+                    parsed = JSON.parse(data);
+                } catch (e) {
+                    const errorMessage = e && e.message ? e.message : 'Unknown error';
+                    console.error('Invalid JSON in Redis data:', errorMessage);
+                    return null;
+                }
+                
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                    console.error('Invalid data structure in Redis');
+                    return null;
+                }
+                
+                return parsed;
+            } catch (error) {
+                const errorMessage = error && error.message ? error.message : 'Unknown error';
+                console.error('Redis get error:', errorMessage);
+                return twoFactorCodes.get(key) || null;
+            }
+        } else {
+            const data = twoFactorCodes.get(key);
+            if (data && Date.now() > data.expiresAt) {
+                twoFactorCodes.delete(key);
+                return null;
+            }
+            return data || null;
+        }
+    },
+    
+    async delete(key) {
+        if (useRedis && redisClient) {
+            try {
+                await redisClient.del(`2fa:${key}`);
+            } catch (error) {
+                const errorMessage = error && error.message ? error.message : 'Unknown error';
+                console.error('Redis delete error:', errorMessage);
+            }
+        }
+        twoFactorCodes.delete(key);
+    }
+};
+
+// Generate backup codes (10 codes, 8 characters each)
+function generateBackupCodes() {
+    const codes = [];
+    for (let i = 0; i < 10; i++) {
+        const code = crypto.randomBytes(4).toString('hex').toUpperCase();
+        codes.push(code);
+    }
+    return codes;
+}
+
+// Hash backup codes for storage
+async function hashBackupCodes(codes) {
+    return await Promise.all(codes.map(code => hashPassword(code)));
+}
+
+// Verify backup code
+async function verifyBackupCode(code, hashedCodes) {
+    if (!hashedCodes || hashedCodes.length === 0) return { valid: false, remainingCodes: [] };
+    
+    for (let i = 0; i < hashedCodes.length; i++) {
+        const isValid = await verifyPassword(code, hashedCodes[i]);
+        if (isValid) {
+            // Remove used code
+            const remaining = [...hashedCodes];
+            remaining.splice(i, 1);
+            return { valid: true, remainingCodes: remaining };
         }
     }
-}, 5 * 60 * 1000);
+    return { valid: false, remainingCodes: hashedCodes };
+}
+
+// Cleanup expired rate limit entries every 5 minutes
+let cleanupInterval = null;
+
+function startCleanup() {
+    if (cleanupInterval) return;
+    
+    cleanupInterval = setInterval(() => {
+        const now = Date.now();
+        
+        // Only process if there are entries
+        if (loginAttempts.size > 0) {
+            for (const [ip, data] of loginAttempts.entries()) {
+                if (now > data.resetTime) {
+                    loginAttempts.delete(ip);
+                }
+            }
+        }
+        
+        // Cleanup expired 2FA codes (only for in-memory, Redis auto-expires)
+        if (!useRedis && twoFactorCodes.size > 0) {
+            for (const [key, data] of twoFactorCodes.entries()) {
+                if (now > data.expiresAt) {
+                    twoFactorCodes.delete(key);
+                }
+            }
+        }
+        
+        // Cleanup expired 2FA attempts
+        if (twoFactorAttempts.size > 0) {
+            for (const [key, data] of twoFactorAttempts.entries()) {
+                if (now > data.resetTime) {
+                    twoFactorAttempts.delete(key);
+                }
+            }
+        }
+    }, 5 * 60 * 1000);
+}
+
+startCleanup();
 
 // Rate limiting middleware
 function rateLimitLogin(req, res, next) {
@@ -94,23 +298,29 @@ function rateLimitLogin(req, res, next) {
 
 // Simple CSRF protection using custom header
 function csrfCrossOrigin(req, res, next) {
-    // Skip CSRF for GET requests
     if (req.method === 'GET') {
         return next();
     }
 
-    // Check for custom header (prevents simple form-based attacks)
     const customHeader = req.headers['x-requested-with'];
+    const origin = req.headers['origin'];
+    const referer = req.headers['referer'];
+    
     if (!customHeader || customHeader !== 'XMLHttpRequest') {
         console.error('❌ CSRF validation failed: Missing X-Requested-With header');
-        // Avoid logging sensitive headers in production
-        if (process.env.NODE_ENV !== 'production') {
-            console.log('⚠️ Request headers:', req.headers);
-        }
+        return res.status(403).json({ error: 'Invalid request' });
+    }
+    
+    if (origin && !origin.startsWith(BASE_URL_PREFIX)) {
+        console.error('❌ CSRF validation failed: Invalid origin', { origin, BASE_URL_PREFIX });
+        return res.status(403).json({ error: 'Invalid request' });
+    }
+    
+    if (referer && !referer.startsWith(BASE_URL_PREFIX)) {
+        console.error('❌ CSRF validation failed: Invalid referer', { referer, BASE_URL_PREFIX });
         return res.status(403).json({ error: 'Invalid request' });
     }
 
-    console.log('ℹ️  CSRF validation passed: X-Requested-With header present');
     next();
 }
 
@@ -118,22 +328,23 @@ const app = express();
 
 const PORT        =  process.env.PORT // || 3005;
 const NODE_ENV    =  process.env.NODE_ENV || 'development';
-const HOST        =  NODE_ENV === 'production' ? process.env.PRODUCTION_HOST : process.env.HOST;            // .(51013.03.1 RAM PRODUCTION_HOST is not defined)
-//nst BASE_URL    = `http${NODE_ENV === 'production' ? 's' : ''}://${HOST}:${PORT}`;                        //#.(51013.03.2).(51211.07.3) 
-//nst BASE_URL    =  HOST.match( /secureaccess/i ) ? `${HOST}`:`${HOST}:${PORT}`;                           //#.(51211.07.3).(51211.07b.1) 
-const BASE_URL    =  HOST.match( /secureaccess/i ) ? `${HOST}`:`${HOST.replace( `:${PORT}`, '' )}:${PORT}`; // .(51211.07b.1).(51211.07.3) 
-const SECURE_PATH =  process.FVARS.SECURE_PATH || ''                                                        // .(51211.07.4 RAM Was ??).(51013.04.17 RAM HOST includes http or https) 
+const HOST        =  process.env.HOST || (NODE_ENV === 'production' ? process.env.PRODUCTION_HOST : null) || 'http://localhost';
+const BASE_URL    =  HOST.includes(':' + PORT) ? HOST : (HOST.match(/secureaccess/i) ? HOST : `${HOST}:${PORT}`);
+const SECURE_PATH =  process.FVARS.SECURE_PATH || '';
+
+// Cache BASE_URL prefix for CSRF validation
+const BASE_URL_PREFIX = BASE_URL.split(':').slice(0, 2).join(':'); 
 
 // JWT Secret - In production, use environment variable
-const JWT_SECRET = process.env.JWT_SECRET || 'SecureAccess-JWT-Secret-Key-2024!@#$%';
+const JWT_SECRET = process.env.JWT_SECRET || '';
+if (!JWT_SECRET) {
+    console.error('❌ JWT_SECRET not set in environment variables');
+    process.exit(1);
+}
 const JWT_EXPIRES_IN = '24h'; // Token expires in 24 hours
   var allowedOrigins_ = process.FVARS.CORS_ORIGINS || [ `${BASE_URL}`, SECURE_PATH ]                        // .(51210.01.1 RAM Add FVARS.CORS_ORIGINS)
 // Middleware
-const allowedOrigins = (NODE_ENV === 'production')
-    ? [ `${HOST}:${PORT}`, `${HOST}`]
-//  : [ `${BASE_URL}`, SECURE_PATH, 'http://127.0.0.1:49306', 'http://localhost:49306', 'http://127.0.0.1:5500', 'http://localhost:5500' ];  // .(51013.04.18 RAM Was: Server: SECURE_API_URL)
-//  : [ `${BASE_URL}`, SECURE_PATH ];
-    :    allowedOrigins_;                                                                                   // .(51210.01.2)
+const allowedOrigins = allowedOrigins_;                                                                    // .(51210.01.2)
 
     allowedOrigins.forEach( aHost => {
         if (aHost.match(/localhost/) ) { allowedOrigins.push( aHost.replace( /localhost/, "127.0.0.1" ) ) } // .(51210.01.3 RAM Check both)
@@ -144,43 +355,28 @@ const allowedOrigins = (NODE_ENV === 'production')
 app.use(cors({
     origin: allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Access', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Access', 'X-Requested-With', 'X-CSRF-Token'],
     credentials: true
 }));
 
 // Security headers middleware
-app.use((req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
-    next();
-});
+app.use(security.securityHeaders);
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Input sanitization middleware
-function sanitizeInput(req, res, next) {
-    if (req.body) {
-        for (const key in req.body) {
-            if (typeof req.body[key] === 'string') {
-                req.body[key] = validator.escape(req.body[key]);
-            }
-        }
-    }
-    next();
-}
+app.use(security.sanitizeInputs);
 
 app.use(express.static(path.join(__dirname, '../../client/c01_client-first-app'))); // Serve client files
 
-// CSRF Protection - configured for cross-origin
+// CSRF Protection - configured for localhost development
 const csrfProtection = csrf({
     cookie: {
-        httpOnly: false,
+        httpOnly: true,
         secure: false,
-        sameSite: 'lax'
+        sameSite: 'lax', // Use 'lax' for localhost (sameSite:'none' requires secure:true)
+        path: '/'
     },
     ignoreMethods: ['GET', 'HEAD', 'OPTIONS']
 });
@@ -189,8 +385,8 @@ const csrfProtection = csrf({
 app.use((req, res, next) => {
     console.log(`ℹ️  ${new Date().toISOString()} - ${req.method} ${req.path}`);
     if (req.path.includes('/api/')) {
-        console.log('ℹ️  All cookies in request:', req.cookies);
-        console.log('ℹ️  Raw cookie header:', req.headers.cookie);
+        const safeCookies = req.cookies ? Object.keys(req.cookies).join(', ') : 'none';
+        console.log('ℹ️  Cookie keys in request:', safeCookies);
     }
     next();
 });
@@ -205,17 +401,13 @@ function generateToken(user) {
         account_status: user.account_status
     };
 
-    console.log('ℹ️  Generating JWT token for user:', user.username);
-    console.log('ℹ️  JWT_SECRET length:', JWT_SECRET.length);
-    console.log('ℹ️  JWT_SECRET preview:', JWT_SECRET.substring(0, 20) + '...');
-
     const token = jwt.sign(payload, JWT_SECRET, {
         expiresIn: JWT_EXPIRES_IN,
         issuer: 'SecureAccess',
         audience: 'SecureAccess-Users'
     });
 
-    console.log('✅ JWT token generated successfully');
+    security.auditLog('TOKEN_GENERATED', { user_id: user.user_id, username: user.username });
     return token;
 }
 
@@ -227,8 +419,8 @@ function verifyToken(req, res, next) {
     // Check for token in Authorization header first, then HTTP-only cookie
     let token = null;
     const authHeader = req.headers.authorization;
-
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+    
+    if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ') && authHeader.length < 2048) {
         token = authHeader.substring(7);
         console.log('ℹ️  Using Bearer token from Authorization header');
     } else if (req.cookies?.authToken) {
@@ -246,23 +438,17 @@ function verifyToken(req, res, next) {
     }
 
     try {
-        console.log('ℹ️  Verifying JWT token...');
-        console.log('ℹ️  Token preview:', token.substring(0, 50) + '...');
-        console.log('ℹ️  JWT_SECRET being used:', JWT_SECRET.substring(0, 20) + '...');
-
         const decoded = jwt.verify(token, JWT_SECRET);
-        console.log('✅ JWT decoded successfully:', { user_id: decoded.user_id, username: decoded.username, role: decoded.role, exp: decoded.exp, iat: decoded.iat });
-        console.log('ℹ️  Current time:', Math.floor(Date.now() / 1000), 'Token exp:', decoded.exp);
+        security.auditLog('TOKEN_VERIFIED', { user_id: decoded.user_id, username: decoded.username, role: decoded.role, ip: req.ip });
 
         req.user = decoded;
-        console.log('✅ JWT verification successful, user set:', req.user.user_id);
         next();
     } catch (error) {
-        console.error('❌ JWT verification error:', error.message);
-        console.error('❌ Full error:', error);
+        const errorMessage = error && error.message ? error.message : 'Unknown error';
+        security.auditLog('TOKEN_VERIFICATION_FAILED', { error: errorMessage, ip: req.ip });
         return res.status(401).json({
             success: false,
-            message: 'Invalid token: ' + error.message,
+            message: 'Invalid token',
             code: 'TOKEN_INVALID'
         });
     }
@@ -299,10 +485,16 @@ const dbConfig = {
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT ||  3306,
     user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
+    password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME || 'secureaccess2',
     timezone: 'Z'
 };
+
+// Validate required database credentials
+if (!dbConfig.password) {
+    console.error('❌ DB_PASSWORD not set in environment variables');
+    process.exit(1);
+}
 
 // Database connection pool
 let pool;
@@ -345,6 +537,11 @@ async function ensureTableExists() {
                 account_status ENUM('Active', 'Inactive', 'Suspended') DEFAULT 'Active',
                 two_factor_enabled BOOLEAN DEFAULT FALSE,
                 two_factor_secret VARCHAR(255),
+                two_factor_method ENUM('email', 'sms', 'app') DEFAULT 'email',
+                two_factor_email VARCHAR(100),
+                two_factor_phone VARCHAR(20),
+                two_factor_verified BOOLEAN DEFAULT FALSE,
+                backup_codes TEXT,
                 role ENUM('User', 'Admin') DEFAULT 'User',
                 security_question_1 TEXT,
                 security_answer_1_hash VARCHAR(255),
@@ -410,44 +607,33 @@ async function ensureTableExists() {
 
 // Utility function to hash passwords
 async function hashPassword(password) {
-    const saltRounds = 12;
+    const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
     return await bcrypt.hash(password, saltRounds);
 }
 
 // Utility function to verify passwords
 async function verifyPassword(password, hash) {
-    // Handle case where hash is null/undefined/empty
-    if (!hash || hash.trim() === '') {
+    if (!password || typeof password !== 'string') {
+        console.error('Password validation failed');
+        return false;
+    }
+    
+    if (!hash || typeof hash !== 'string' || hash.trim() === '') {
+        console.error('Hash validation failed');
         return false;
     }
 
     try {
         return await bcrypt.compare(password, hash);
     } catch (error) {
-        const errorMessage = error && error.message ? error.message : 'Unknown password verification error';
-        console.error('Password verification error:', errorMessage);
+        const errorMessage = error && error.message ? error.message : 'Unknown error';
+        console.error('Verification error:', errorMessage);
         return false;
     }
 }
 
-// Health check endpoint (no CSRF needed)
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        database: 'connected'
-    });
-});
-
+// Health check endpoint (no CSRF needed) - moved after CORS middleware
 // Config endpoint to provide client configuration
-app.get('/config', (req, res) => {
-    res.json({
-        port: PORT,
-        host: HOST,
-        environment: NODE_ENV,
-        apiBaseUrl: `${BASE_URL}/api`
-    });
-});
 
 // Applications endpoints
 app.get('/api/applications', verifyToken, async (req, res) => {
@@ -465,12 +651,7 @@ app.get('/api/applications', verifyToken, async (req, res) => {
             data: rows
         });
     } catch (error) {
-        console.error('❌ Error fetching applications:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch applications',
-            error: error.message
-        });
+        handleError(error, res, 'fetch applications');
     }
 });
 
@@ -494,12 +675,7 @@ app.get('/api/applications/by-key/:app_key', async (req, res) => {
             data: rows[0]
         });
     } catch (error) {
-        console.error('❌ Error fetching application by key:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch application',
-            error: error.message
-        });
+        handleError(error, res, 'fetch application by key', 500, 'Failed to fetch application');
     }
 });
 
@@ -523,17 +699,12 @@ app.get('/api/applications/:id', verifyToken, async (req, res) => {
             data: rows[0]
         });
     } catch (error) {
-        console.error('❌ Error fetching application:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch application',
-            error: error.message
-        });
+        handleError(error, res, 'fetch application');
     }
 });
 
 // Create new application
-app.post('/api/applications', csrfCrossOrigin, adminAccess, async (req, res) => {
+app.post('/api/applications', csrfProtection, csrfCrossOrigin, adminAccess, async (req, res) => {
     try {
         const {
             application_name,
@@ -591,30 +762,41 @@ app.post('/api/applications', csrfCrossOrigin, adminAccess, async (req, res) => 
             }
         });
     } catch (error) {
-        console.error('❌ Error creating application:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to create application',
-            error: error.message
-        });
+        handleError(error, res, 'create application');
     }
 });
 
 // Update application
-app.put('/api/applications/:id', csrfCrossOrigin, adminAccess, async (req, res) => {
+app.put('/api/applications/:id', csrfProtection, csrfCrossOrigin, adminAccess, async (req, res) => {
     try {
         const applicationId = parseInt(req.params.id);
-        const {
+        let {
             application_name,
             description,
             redirect_URL,
             failure_URL,
+            app_key,
             security_roles,
             parm_email,
             parm_username,
             parm_PKCE,
             status
         } = req.body;
+
+        // Helper function to decode HTML entities
+        const decodeHtmlEntities = (str) => {
+            if (!str) return str;
+            return str
+                .replace(/&#x2F;/g, '/')
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"')
+                .replace(/&#39;/g, "'");
+        };
+        
+        redirect_URL = decodeHtmlEntities(redirect_URL);
+        failure_URL = decodeHtmlEntities(failure_URL);
 
         if (!application_name) {
             return res.status(400).json({
@@ -625,19 +807,20 @@ app.put('/api/applications/:id', csrfCrossOrigin, adminAccess, async (req, res) 
 
         const [result] = await pool.execute(`
             UPDATE sa_applications SET
-                application_name = ?, description = ?, redirect_URL = ?, failure_URL = ?, security_roles = ?,
+                application_name = ?, description = ?, redirect_URL = ?, failure_URL = ?, app_key = ?, security_roles = ?,
                 parm_email = ?, parm_username = ?, parm_PKCE = ?, status = ?
             WHERE application_id = ?
         `, [
             application_name,
-            description || null,
-            redirect_URL || null,
-            failure_URL || null,
-            security_roles || null,
-            parm_email || null,
-            parm_username || null,
-            parm_PKCE || null,
-            status || null,
+            description ?? null,
+            redirect_URL ?? null,
+            failure_URL ?? null,
+            app_key ?? null,
+            security_roles ?? null,
+            parm_email ?? null,
+            parm_username ?? null,
+            parm_PKCE ?? null,
+            status ?? null,
             applicationId
         ]);
 
@@ -653,17 +836,12 @@ app.put('/api/applications/:id', csrfCrossOrigin, adminAccess, async (req, res) 
             message: 'Application updated successfully'
         });
     } catch (error) {
-        console.error('❌ Error updating application:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update application',
-            error: error.message
-        });
+        handleError(error, res, 'update application');
     }
 });
 
 // Delete application
-app.delete('/api/applications/:id', csrfCrossOrigin, adminAccess, async (req, res) => {
+app.delete('/api/applications/:id', csrfProtection, csrfCrossOrigin, adminAccess, async (req, res) => {
     try {
         const applicationId = parseInt(req.params.id);
 
@@ -684,12 +862,7 @@ app.delete('/api/applications/:id', csrfCrossOrigin, adminAccess, async (req, re
             message: 'Application deleted successfully'
         });
     } catch (error) {
-        console.error('❌ Error deleting application:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete application',
-            error: error.message
-        });
+        handleError(error, res, 'delete application');
     }
 });
 
@@ -705,6 +878,10 @@ app.get('/api/users', adminAccess, async (req, res) => {
                 email,
                 account_status,
                 two_factor_enabled,
+                two_factor_method,
+                two_factor_email,
+                two_factor_phone,
+                two_factor_verified,
                 role,
                 token_expiration_minutes,
                 last_login_timestamp,
@@ -720,12 +897,61 @@ app.get('/api/users', adminAccess, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error fetching users:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch users',
-            error: error.message
+        handleError(error, res, 'fetch users');
+    }
+});
+
+// Get own profile - /me endpoint (MUST be before /:id route)
+app.get('/api/users/me', verifyToken, async (req, res) => {
+    try {
+        console.log('ℹ️  /users/me request from user:', JSON.stringify(req.user));
+
+        if (!req.user) {
+            console.error('❌ No user object in request');
+            return res.status(401).json({
+                success: false,
+                message: 'Authentication required'
+            });
+        }
+
+        const userId = req.user.user_id;
+        console.log('ℹ️  Looking up user ID:', userId, 'Type:', typeof userId, 'Full user object:', JSON.stringify(req.user));
+
+        if (!userId) {
+            console.error('❌ No user ID in token:', JSON.stringify(req.user));
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid user data in token'
+            });
+        }
+
+        const [rows] = await pool.execute(`
+            SELECT
+                user_id, first_name, last_name, username, email,
+                account_status, last_login_timestamp, role,
+                security_question_1, security_question_2,
+                two_factor_enabled, two_factor_method, two_factor_email, two_factor_phone, two_factor_verified,
+                token_expiration_minutes, created_at, updated_at
+            FROM sa_users
+            WHERE user_id = ?
+        `, [parseInt(userId)]);
+
+        if (rows.length === 0) {
+            console.error('❌ User not found in database:', userId);
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        console.log('ℹ️  User profile found:', rows[0].username);
+        res.json({
+            success: true,
+            data: rows[0]
         });
+
+    } catch (error) {
+        handleError(error, res, 'fetch user profile');
     }
 });
 
@@ -750,7 +976,10 @@ app.get('/api/users/:id', verifyToken, async (req, res) => {
                 email,
                 account_status,
                 two_factor_enabled,
-                two_factor_secret,
+                two_factor_method,
+                two_factor_email,
+                two_factor_phone,
+                two_factor_verified,
                 role,
                 security_question_1,
                 security_answer_1_hash,
@@ -777,21 +1006,15 @@ app.get('/api/users/:id', verifyToken, async (req, res) => {
         });
 
     } catch (error) {
-        const errorMessage = error && error.message ? error.message : 'Unknown error';
-        console.error('❌ Error fetching user:', errorMessage);
-        if (!res.headersSent) {
-            res.status(500).json({
-                success: false,
-                message: 'Failed to fetch user'
-            });
-        }
+        handleError(error, res, 'fetch user');
     }
 });
 
-// Get own profile - /me endpoint
+// MOVED ABOVE - Get own profile route must be before /:id route
+/*
 app.get('/api/users/me', verifyToken, async (req, res) => {
     try {
-        console.log('ℹ️  /users/me request from user:', req.user);
+        console.log('ℹ️  /users/me request from user:', JSON.stringify(req.user));
 
         if (!req.user) {
             console.error('❌ No user object in request');
@@ -802,10 +1025,10 @@ app.get('/api/users/me', verifyToken, async (req, res) => {
         }
 
         const userId = req.user.user_id;
-        console.log('ℹ️  Looking up user ID:', userId, 'Type:', typeof userId);
+        console.log('ℹ️  Looking up user ID:', userId, 'Type:', typeof userId, 'Full user object:', JSON.stringify(req.user));
 
         if (!userId) {
-            console.error('❌ No user ID in token:', req.user);
+            console.error('❌ No user ID in token:', JSON.stringify(req.user));
             return res.status(400).json({
                 success: false,
                 message: 'Invalid user data in token'
@@ -817,7 +1040,8 @@ app.get('/api/users/me', verifyToken, async (req, res) => {
                 user_id, first_name, last_name, username, email,
                 account_status, last_login_timestamp, role,
                 security_question_1, security_question_2,
-                two_factor_enabled, token_expiration_minutes, created_at, updated_at
+                two_factor_enabled, two_factor_method, two_factor_email, two_factor_phone, two_factor_verified,
+                token_expiration_minutes, created_at, updated_at
             FROM sa_users
             WHERE user_id = ?
         `, [parseInt(userId)]);
@@ -837,17 +1061,13 @@ app.get('/api/users/me', verifyToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error fetching user profile:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch user profile',
-            error: error.message
-        });
+        handleError(error, res, 'fetch user profile');
     }
 });
+*/
 
 // Update own profile - /me endpoint
-app.put('/api/users/me', csrfCrossOrigin, verifyToken, async (req, res) => {
+app.put('/api/users/me', csrfProtection, csrfCrossOrigin, verifyToken, async (req, res) => {
     // Allow both Admin and User roles
     if (!req.user || !['Admin', 'User'].includes(req.user.role)) {
         return res.status(403).json({
@@ -893,7 +1113,7 @@ app.put('/api/users/me', csrfCrossOrigin, verifyToken, async (req, res) => {
             updates.push('email = ?');
             values.push(email);
         }
-        if (password !== undefined && password.trim() !== '') {
+        if (password !== undefined && password !== null && password.trim() !== '') {
             console.log('ℹ️  Hashing new password...');
             const passwordHash = await hashPassword(password);
             updates.push('master_password_hash = ?');
@@ -933,10 +1153,28 @@ app.put('/api/users/me', csrfCrossOrigin, verifyToken, async (req, res) => {
 
         // Validate updates array contains only safe column assignments
         const allowedColumns = ['first_name', 'last_name', 'username', 'email', 'master_password_hash', 'security_question_1', 'security_answer_1_hash', 'security_question_2', 'security_answer_2_hash', 'updated_at'];
-        const safeUpdates = updates.filter(update => {
-            const column = update.split(' = ')[0];
-            return allowedColumns.includes(column);
-        });
+        const safeUpdates = [];
+        
+        for (const update of updates) {
+            const column = update.split(' = ')[0].trim();
+            console.log('ℹ️  Validating update:', update, 'Column:', column);
+            if (!allowedColumns.includes(column)) {
+                console.error('❌ Invalid column:', column);
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid column in update'
+                });
+            }
+            // Ensure the update only contains column = ?
+            if (!/^[a-z_0-9]+\s*=\s*\?$/i.test(update) && update !== 'updated_at = CURRENT_TIMESTAMP') {
+                console.error('❌ Invalid format for update:', update);
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid update format'
+                });
+            }
+            safeUpdates.push(update);
+        }
 
         const updateSQL = `UPDATE sa_users SET ${safeUpdates.join(', ')} WHERE user_id = ?`;
 
@@ -958,17 +1196,12 @@ app.put('/api/users/me', csrfCrossOrigin, verifyToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error updating profile:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update profile',
-            error: error.message
-        });
+        handleError(error, res, 'update profile');
     }
 });
 
 // Create new user - PROTECTED WITH JWT
-app.post('/api/users', csrfCrossOrigin, adminAccess, async (req, res) => {
+app.post('/api/users', csrfProtection, csrfCrossOrigin, adminAccess, async (req, res) => {
     try {
         const {
             first_name,
@@ -977,7 +1210,10 @@ app.post('/api/users', csrfCrossOrigin, adminAccess, async (req, res) => {
             email,
             password,
             account_status = 'active',
-            two_factor_enabled = false,
+            two_factor_enabled = 'No',
+            two_factor_method = 'email',
+            two_factor_email,
+            two_factor_phone,
             role = 'User',
             security_question_1,
             security_answer_1,
@@ -1002,24 +1238,12 @@ app.post('/api/users', csrfCrossOrigin, adminAccess, async (req, res) => {
             });
         }
 
-        // Validate password strength
-        if (!validator.isLength(password, { min: 8, max: 128 })) {
+        // Validate password strength (includes length check)
+        const passwordStrength = security.validatePasswordStrength(password);
+        if (!passwordStrength.valid) {
             return res.status(400).json({
                 success: false,
-                message: 'Password must be between 8 and 128 characters long'
-            });
-        }
-
-        if (!validator.isStrongPassword(password, {
-            minLength: 8,
-            minLowercase: 1,
-            minUppercase: 1,
-            minNumbers: 1,
-            minSymbols: 1
-        })) {
-            return res.status(400).json({
-                success: false,
-                message: 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'
+                message: passwordStrength.errors.join('. ')
             });
         }
 
@@ -1061,13 +1285,16 @@ app.post('/api/users', csrfCrossOrigin, adminAccess, async (req, res) => {
                 master_password_hash,
                 account_status,
                 two_factor_enabled,
+                two_factor_method,
+                two_factor_email,
+                two_factor_phone,
                 role,
                 security_question_1,
                 security_answer_1_hash,
                 security_question_2,
                 security_answer_2_hash,
                 token_expiration_minutes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             first_name,
             last_name,
@@ -1076,6 +1303,9 @@ app.post('/api/users', csrfCrossOrigin, adminAccess, async (req, res) => {
             passwordHash,
             account_status,
             two_factor_enabled,
+            two_factor_method,
+            two_factor_email || null,
+            two_factor_phone || null,
             role,
             security_question_1 || null,
             hashedAnswer1,
@@ -1100,17 +1330,12 @@ app.post('/api/users', csrfCrossOrigin, adminAccess, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error creating user:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to create user',
-            error: error.message
-        });
+        handleError(error, res, 'create user');
     }
 });
 
 // Update user - PROTECTED WITH JWT
-app.put('/api/users/:id', csrfCrossOrigin, adminAccess, async (req, res) => {
+app.put('/api/users/:id', csrfProtection, csrfCrossOrigin, adminAccess, async (req, res) => {
     try {
         const userId = parseInt(req.params.id);
 
@@ -1142,6 +1367,10 @@ app.put('/api/users/:id', csrfCrossOrigin, adminAccess, async (req, res) => {
             password,
             account_status,
             two_factor_enabled,
+            two_factor_method,
+            two_factor_email,
+            two_factor_phone,
+            two_factor_verified,
             role,
             security_question_1,
             security_answer_1,
@@ -1170,7 +1399,15 @@ app.put('/api/users/:id', csrfCrossOrigin, adminAccess, async (req, res) => {
             updates.push('email = ?');
             values.push(email);
         }
-        if (password !== undefined && password.trim() !== '') {
+        if (password !== undefined && password !== null && password.trim() !== '') {
+            // Validate password strength
+            const passwordStrength = security.validatePasswordStrength(password);
+            if (!passwordStrength.valid) {
+                return res.status(400).json({
+                    success: false,
+                    message: passwordStrength.errors.join('. ')
+                });
+            }
             const passwordHash = await hashPassword(password);
             updates.push('master_password_hash = ?');
             values.push(passwordHash);
@@ -1182,6 +1419,32 @@ app.put('/api/users/:id', csrfCrossOrigin, adminAccess, async (req, res) => {
         if (two_factor_enabled !== undefined) {
             updates.push('two_factor_enabled = ?');
             values.push(two_factor_enabled);
+        }
+        if (two_factor_method !== undefined) {
+            const validMethods = ['email', 'sms', 'app'];
+            if (!validMethods.includes(two_factor_method)) {
+                return res.status(400).json({ success: false, message: 'Invalid 2FA method' });
+            }
+            updates.push('two_factor_method = ?');
+            values.push(two_factor_method);
+        }
+        if (two_factor_email !== undefined) {
+            if (two_factor_email && !validator.isEmail(two_factor_email)) {
+                return res.status(400).json({ success: false, message: 'Invalid 2FA email format' });
+            }
+            updates.push('two_factor_email = ?');
+            values.push(two_factor_email || null);
+        }
+        if (two_factor_phone !== undefined) {
+            updates.push('two_factor_phone = ?');
+            values.push(two_factor_phone || null);
+        }
+        if (two_factor_verified !== undefined) {
+            if (typeof two_factor_verified !== 'boolean' && two_factor_verified !== 0 && two_factor_verified !== 1) {
+                return res.status(400).json({ success: false, message: 'Invalid 2FA verified value' });
+            }
+            updates.push('two_factor_verified = ?');
+            values.push(two_factor_verified);
         }
         if (role !== undefined) {
             updates.push('role = ?');
@@ -1222,7 +1485,7 @@ app.put('/api/users/:id', csrfCrossOrigin, adminAccess, async (req, res) => {
         values.push(userId);
 
         // Validate updates array contains only safe column assignments
-        const allowedColumns = ['first_name', 'last_name', 'username', 'email', 'master_password_hash', 'account_status', 'two_factor_enabled', 'role', 'security_question_1', 'security_answer_1_hash', 'security_question_2', 'security_answer_2_hash', 'token_expiration_minutes', 'updated_at'];
+        const allowedColumns = ['first_name', 'last_name', 'username', 'email', 'master_password_hash', 'account_status', 'two_factor_enabled', 'two_factor_method', 'two_factor_email', 'two_factor_phone', 'two_factor_verified', 'role', 'security_question_1', 'security_answer_1_hash', 'security_question_2', 'security_answer_2_hash', 'token_expiration_minutes', 'updated_at'];
         const safeUpdates = updates.filter(update => {
             const column = update.split(' = ')[0];
             return allowedColumns.includes(column);
@@ -1238,17 +1501,12 @@ app.put('/api/users/:id', csrfCrossOrigin, adminAccess, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error updating user:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update user',
-            error: error.message
-        });
+        handleError(error, res, 'update user');
     }
 });
 
 // Delete user - PROTECTED WITH JWT
-app.delete('/api/users/:id', csrfCrossOrigin, adminAccess, async (req, res) => {
+app.delete('/api/users/:id', csrfProtection, csrfCrossOrigin, adminAccess, async (req, res) => {
     try {
         const userId = parseInt(req.params.id);
 
@@ -1281,12 +1539,7 @@ app.delete('/api/users/:id', csrfCrossOrigin, adminAccess, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error deleting user:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete user',
-            error: error.message
-        });
+        handleError(error, res, 'delete user');
     }
 });
 
@@ -1308,17 +1561,12 @@ app.get('/api/app-users/:applicationId', adminAccess, async (req, res) => {
             data: rows
         });
     } catch (error) {
-        console.error('❌ Error fetching application users:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch application users',
-            error: error.message
-        });
+        handleError(error, res, 'fetch application users');
     }
 });
 
 // Create app-user assignment
-app.post('/api/app-users', csrfCrossOrigin, adminAccess, async (req, res) => {
+app.post('/api/app-users', csrfProtection, csrfCrossOrigin, adminAccess, async (req, res) => {
     try {
         const {
             application_id,
@@ -1356,17 +1604,12 @@ app.post('/api/app-users', csrfCrossOrigin, adminAccess, async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('❌ Error creating app-user assignment:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to create user assignment',
-            error: error.message
-        });
+        handleError(error, res, 'create app-user assignment');
     }
 });
 
 // Update app-user assignment
-app.put('/api/app-users/:applicationId/:userId', csrfCrossOrigin, adminAccess, async (req, res) => {
+app.put('/api/app-users/:applicationId/:userId', csrfProtection, csrfCrossOrigin, adminAccess, async (req, res) => {
     try {
         const applicationId = parseInt(req.params.applicationId);
         const userId = parseInt(req.params.userId);
@@ -1396,17 +1639,12 @@ app.put('/api/app-users/:applicationId/:userId', csrfCrossOrigin, adminAccess, a
             message: 'User assignment updated successfully'
         });
     } catch (error) {
-        console.error('❌ Error updating app-user assignment:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update user assignment',
-            error: error.message
-        });
+        handleError(error, res, 'update app-user assignment');
     }
 });
 
 // Delete app-user assignment
-app.delete('/api/app-users/:applicationId/:userId', csrfCrossOrigin, adminAccess, async (req, res) => {
+app.delete('/api/app-users/:applicationId/:userId', csrfProtection, csrfCrossOrigin, adminAccess, async (req, res) => {
     try {
         const applicationId = parseInt(req.params.applicationId);
         const userId = parseInt(req.params.userId);
@@ -1428,12 +1666,7 @@ app.delete('/api/app-users/:applicationId/:userId', csrfCrossOrigin, adminAccess
             message: 'User assignment deleted successfully'
         });
     } catch (error) {
-        console.error('❌ Error deleting app-user assignment:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete user assignment',
-            error: error.message
-        });
+        handleError(error, res, 'delete app-user assignment');
     }
 });
 
@@ -1442,7 +1675,7 @@ app.get('/api/user-applications', verifyToken, async (req, res) => {
     try {
         const userId = req.user.user_id;
         const [rows] = await pool.execute(`
-            SELECT a.application_id, a.application_name, a.description
+            SELECT a.application_id, a.application_name, a.description, a.redirect_URL
             FROM sa_applications a
             INNER JOIN sa_app_user au ON a.application_id = au.application_id
             WHERE au.user_id = ?
@@ -1454,19 +1687,14 @@ app.get('/api/user-applications', verifyToken, async (req, res) => {
             data: rows
         });
     } catch (error) {
-        console.error('❌ Error fetching user applications:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch user applications',
-            error: error.message
-        });
+        handleError(error, res, 'fetch user applications');
     }
 });
 
 // Login endpoint - UPDATED TO GENERATE JWT TOKENS
-app.post('/api/auth/login', rateLimitLogin, async (req, res) => {
+app.post('/api/auth/login', csrfProtection, csrfCrossOrigin, rateLimitLogin, security.accountLockoutMiddleware, async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, password, twoFactorCode } = req.body;
 
         console.log(`ℹ️  Login attempt for username: ${username}`);
 
@@ -1477,14 +1705,15 @@ app.post('/api/auth/login', rateLimitLogin, async (req, res) => {
             });
         }
 
-        // Find user by username or email
+        // Find user by username or email (excluding backup_codes initially for performance)
         const [users] = await pool.execute(
-            'SELECT user_id, first_name, last_name, username, email, account_status, two_factor_enabled, last_login_timestamp, master_password_hash, role FROM sa_users WHERE username = ? OR email = ?',
+            'SELECT user_id, first_name, last_name, username, email, account_status, two_factor_enabled, two_factor_email, last_login_timestamp, master_password_hash, role FROM sa_users WHERE username = ? OR email = ?',
             [username, username]
         );
 
         if (users.length === 0) {
             console.error(`❌ User not found: ${username}`);
+            security.recordFailedAttempt(username, req.ip);
             return res.status(401).json({
                 success: false,
                 message: 'Invalid credentials'
@@ -1499,25 +1728,192 @@ app.post('/api/auth/login', rateLimitLogin, async (req, res) => {
 
         if (!passwordValid) {
             console.error(`❌ Invalid password for user: ${username}`);
+            const locked = security.recordFailedAttempt(username, req.ip);
+            
+            if (locked) {
+                return res.status(423).json({
+                    success: false,
+                    message: 'Account locked due to multiple failed attempts. Try again in 30 minutes.'
+                });
+            }
+            
             return res.status(401).json({
                 success: false,
                 message: 'Invalid credentials'
             });
         }
 
-        // Reset rate limit on successful login
-        const ip = req.ip || req.connection.remoteAddress;
-        if (loginAttempts.has(ip)) {
-            loginAttempts.delete(ip);
-        }
-
         // Check account status (case insensitive)
         if (user.account_status.toLowerCase() !== 'active') {
             console.error(`❌ Account not active: ${user.account_status}`);
+            security.auditLog('LOGIN_INACTIVE_ACCOUNT', { username, ip: req.ip });
             return res.status(403).json({
                 success: false,
                 message: 'Account is disabled'
             });
+        }
+
+        // Check if 2FA is enabled
+        if (user.two_factor_enabled === 'Yes' || user.two_factor_enabled === 1) {
+            const twoFactorKey = `${user.user_id}_${username}`;
+            
+            if (!twoFactorCode) {
+                // Generate and send 2FA code (8 digits)
+                const code = crypto.randomInt(10000000, 100000000).toString();
+                const expiresInSeconds = 10 * 60; // 10 minutes
+                
+                await twoFactorStorage.set(twoFactorKey, { code, userId: user.user_id }, expiresInSeconds);
+                
+                // Send email with code
+                let transporter;
+                try {
+                    const config = await loadSmtpConfig();
+                    const port = parseInt(config.SMTP_PORT);
+                    const secure = port === 465;
+                    const transporter = nodemailer.createTransport({
+                        host: config.SMTP_HOST,
+                        port: port,
+                        secure: secure,
+                        auth: { user: config.SMTP_USER, pass: config.SMTP_PASSWORD },
+                        tls: { rejectUnauthorized: true },
+                        requireTLS: true
+                    });
+                    
+                    const emailTo = user.two_factor_email || user.email;
+                    await transporter.sendMail({
+                        from: config.SMTP_FROM_EMAIL,
+                        to: emailTo,
+                        subject: 'SecureAccess - Your 2FA Code',
+                        text: `Your 2-factor authentication code is: ${code}\n\nThis code will expire in 10 minutes.`
+                    });
+                    
+                    console.log(`✅ 2FA code sent to ${emailTo}`);
+                    security.auditLog('2FA_CODE_SENT', { username, email: emailTo, ip: req.ip });
+                } catch (emailError) {
+                    console.error('❌ Failed to send 2FA email:', emailError);
+                    security.auditLog('2FA_EMAIL_FAILED', { username, ip: req.ip });
+                    return res.status(500).json({
+                        success: false,
+                        message: 'Failed to send 2FA code'
+                    });
+                } finally {
+                    if (transporter) {
+                        transporter.close();
+                    }
+                }
+                
+                return res.json({
+                    success: false,
+                    requiresTwoFactor: true,
+                    message: '2FA code sent to your email'
+                });
+            } else {
+                // Rate limit 2FA attempts (5 attempts per 10 minutes)
+                const now = Date.now();
+                const attemptKey = `${twoFactorKey}_${req.ip}`;
+                
+                if (!twoFactorAttempts.has(attemptKey)) {
+                    twoFactorAttempts.set(attemptKey, { count: 0, resetTime: now + (10 * 60 * 1000) });
+                }
+                
+                const attempts = twoFactorAttempts.get(attemptKey);
+                
+                if (now > attempts.resetTime) {
+                    attempts.count = 0;
+                    attempts.resetTime = now + (10 * 60 * 1000);
+                }
+                
+                if (attempts.count >= 5) {
+                    security.auditLog('2FA_RATE_LIMIT', { username, ip: req.ip });
+                    return res.status(429).json({
+                        success: false,
+                        message: 'Too many 2FA attempts. Please try again later.'
+                    });
+                }
+                
+                attempts.count++;
+                
+                // Verify 2FA code
+                const storedData = await twoFactorStorage.get(twoFactorKey);
+                
+                if (!storedData) {
+                    security.auditLog('2FA_CODE_EXPIRED', { username, ip: req.ip });
+                    return res.status(401).json({
+                        success: false,
+                        message: '2FA code expired or invalid'
+                    });
+                }
+                
+                // Only check expiration for in-memory storage (Redis handles expiration automatically)
+                if (!useRedis && storedData.expiresAt && Date.now() > storedData.expiresAt) {
+                    await twoFactorStorage.delete(twoFactorKey);
+                    security.auditLog('2FA_CODE_EXPIRED', { username, ip: req.ip });
+                    return res.status(401).json({
+                        success: false,
+                        message: '2FA code expired'
+                    });
+                }
+                
+                let codeValid = crypto.timingSafeEqual(
+                    Buffer.from(storedData.code),
+                    Buffer.from(twoFactorCode)
+                );
+                let usedBackupCode = false;
+                
+                // If regular code fails, try backup codes (fetch them now if needed)
+                if (!codeValid) {
+                    const [userWithBackup] = await pool.execute(
+                        'SELECT backup_codes FROM sa_users WHERE user_id = ?',
+                        [user.user_id]
+                    );
+                    if (userWithBackup.length > 0 && userWithBackup[0].backup_codes) {
+                        try {
+                            const backupCodes = safeJsonParse(userWithBackup[0].backup_codes, []);
+                            const result = await verifyBackupCode(twoFactorCode, backupCodes);
+                        
+                        if (result.valid) {
+                            codeValid = true;
+                            usedBackupCode = true;
+                            
+                            // Update user's backup codes (remove used one)
+                            await pool.execute(
+                                'UPDATE sa_users SET backup_codes = ? WHERE user_id = ?',
+                                [JSON.stringify(result.remainingCodes), user.user_id]
+                            );
+                            
+                                console.log(`✅ Backup code used for user: ${username} (${result.remainingCodes.length} remaining)`);
+                                security.auditLog('2FA_BACKUP_CODE_USED', { username, remaining: result.remainingCodes.length, ip: req.ip });
+                            }
+                        } catch (error) {
+                            const errorMessage = error && error.message ? error.message : 'Unknown error';
+                            console.error('Error verifying backup code:', errorMessage);
+                        }
+                    }
+                }
+                
+                if (!codeValid) {
+                    security.auditLog('2FA_CODE_INVALID', { username, ip: req.ip });
+                    return res.status(401).json({
+                        success: false,
+                        message: 'Invalid 2FA code'
+                    });
+                }
+                
+                // Code is valid, delete it and clear attempts
+                await twoFactorStorage.delete(twoFactorKey);
+                twoFactorAttempts.delete(attemptKey);
+                security.auditLog('2FA_SUCCESS', { username, ip: req.ip });
+                console.log(`✅ 2FA code verified for user: ${username}`);
+            }
+        }
+
+        // Clear failed attempts on successful login
+        security.clearFailedAttempts(username);
+        
+        // Reset rate limit on successful login
+        const ip = req.ip || req.connection.remoteAddress;
+        if (loginAttempts.has(ip)) {
+            loginAttempts.delete(ip);
         }
 
         // Generate JWT token
@@ -1530,13 +1926,14 @@ app.post('/api/auth/login', rateLimitLogin, async (req, res) => {
             [user.user_id]
         );
 
+        security.auditLog('LOGIN_SUCCESS', { username, role: user.role, ip: req.ip });
         console.log(`✅ Login successful for user: ${username} (role: ${user.role})`);
 
         // Set JWT token as HTTP-only cookie
         res.cookie('authToken', token, {
             httpOnly: true,
-            secure: false,
-            sameSite: 'lax',
+            secure: NODE_ENV === 'production',
+            sameSite: 'strict',
             maxAge: 24 * 60 * 60 * 1000,
             path: '/'
         });
@@ -1555,12 +1952,7 @@ app.post('/api/auth/login', rateLimitLogin, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error during login:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Login failed',
-            error: error.message
-        });
+        handleError(error, res, 'login');
     }
 });
 
@@ -1623,7 +2015,7 @@ app.get('/api/computer-info', verifyToken, async (req, res) => {
 });
 
 // Track application usage
-app.post('/api/track-user', csrfCrossOrigin, verifyToken, async (req, res) => {
+app.post('/api/track-user', csrfProtection, csrfCrossOrigin, verifyToken, async (req, res) => {
     try {
         const userId = req.user.user_id;
         const { application_id, computer_name, computer_MAC, computer_ip } = req.body;
@@ -1660,17 +2052,12 @@ app.post('/api/track-user', csrfCrossOrigin, verifyToken, async (req, res) => {
             message: 'Application usage tracked'
         });
     } catch (error) {
-        console.error('❌ Error tracking application usage:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to track application usage',
-            error: error.message
-        });
+        handleError(error, res, 'track application usage');
     }
 });
 
 // Get security questions - PUBLIC ACCESS (no CSRF protection)
-app.post('/api/auth/security-questions', async (req, res) => {
+app.post('/api/auth/security-questions', csrfProtection, csrfCrossOrigin, async (req, res) => {
     try {
         const { username } = req.body;
 
@@ -1703,16 +2090,12 @@ app.post('/api/auth/security-questions', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error fetching security questions:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch security questions'
-        });
+        handleError(error, res, 'fetch security questions');
     }
 });
 
 // Verify security answer - PUBLIC ACCESS (no CSRF protection)
-app.post('/api/auth/verify-security-answer', async (req, res) => {
+app.post('/api/auth/verify-security-answer', csrfProtection, csrfCrossOrigin, async (req, res) => {
     try {
         const { username, questionNumber, answer } = req.body;
 
@@ -1746,7 +2129,6 @@ app.post('/api/auth/verify-security-answer', async (req, res) => {
         res.json({ success: isValid });
 
     } catch (error) {
-        console.error('❌ Error verifying security answer:', error);
         res.json({ success: false });
     }
 });
@@ -1766,29 +2148,77 @@ app.get('/api/auth/verify', verifyToken, async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('❌ Error in auth verify:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Authentication verification failed'
-        });
+        handleError(error, res, 'verify authentication');
     }
 });
 
 // Auth routes are handled directly in server.js
 
 // Check if email exists
-app.post('/api/auth/check-email', async (req, res) => {
+app.post('/api/auth/check-email', csrfProtection, csrfCrossOrigin, async (req, res) => {
     try {
         const { email } = req.body;
         const [rows] = await pool.execute('SELECT COUNT(*) as count FROM sa_users WHERE email = ?', [email]);
         res.json({ success: true, exists: rows[0].count > 0 });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error checking email' });
+        handleError(error, res, 'check email');
+    }
+});
+
+// Register new user from external app (IODD)
+app.post('/api/register', csrfProtection, csrfCrossOrigin, async (req, res) => {
+    try {
+        const { firstName, lastName, email, username, password, securityQuestion1, securityAnswer1, securityQuestion2, securityAnswer2, appKey, userRole } = req.body;
+        
+        const apiKey = req.headers['x-api-key'];
+        const expectedApiKey = process.env.SECURE_API_SECRET || process.FVARS.SECURE_API_SECRET;
+        if (!expectedApiKey || apiKey !== expectedApiKey) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        const expectedAppKey = process.env.IODD_APP_KEY || process.FVARS.IODD_APP_KEY;
+        if (!expectedAppKey || appKey !== expectedAppKey) {
+            return res.status(403).json({ success: false, message: 'Invalid app key' });
+        }
+
+        if (!firstName || !lastName || !email || !username || !password) {
+            return res.status(400).json({ success: false, message: 'Missing required fields' });
+        }
+
+        const [existingUser] = await pool.execute('SELECT user_id FROM sa_users WHERE email = ? OR username = ?', [email, username]);
+        if (existingUser.length > 0) {
+            return res.status(409).json({ success: false, message: 'User already exists' });
+        }
+
+        // Hash password and security answers
+        const hashedPassword = await hashPassword(password);
+        const hashedAnswer1 = securityAnswer1 ? await hashPassword(securityAnswer1) : null;
+        const hashedAnswer2 = securityAnswer2 ? await hashPassword(securityAnswer2) : null;
+
+        const [result] = await pool.execute(`
+            INSERT INTO sa_users (first_name, last_name, email, username, master_password_hash, 
+                security_question_1, security_answer_1_hash, security_question_2, security_answer_2_hash, 
+                account_status, role) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', 'User')
+        `, [firstName, lastName, email, username, hashedPassword, securityQuestion1, hashedAnswer1, securityQuestion2, hashedAnswer2]);
+
+        if (!result || !result.insertId) {
+            throw new Error('Failed to create user');
+        }
+
+        const [app] = await pool.execute('SELECT application_id FROM sa_applications WHERE app_key = ?', [appKey]);
+        if (app.length > 0) {
+            await pool.execute('INSERT INTO sa_app_user (application_id, user_id, app_role, status) VALUES (?, ?, ?, "Active")', [app[0].application_id, result.insertId, userRole || 'Member']);
+        }
+
+        res.json({ success: true, message: 'User created successfully', userId: result.insertId });
+    } catch (error) {
+        handleError(error, res, 'register user');
     }
 });
 
 // Create new user from PKCE token
-app.post('/api/auth/create-user', async (req, res) => {
+app.post('/api/auth/create-user', csrfProtection, csrfCrossOrigin, async (req, res) => {
     try {
         const { first_name, last_name, email, account_status, master_password_hash, security_question_1, security_question_2, security_answer_1_hash, security_answer_2_hash, role } = req.body;
 
@@ -1807,25 +2237,24 @@ app.post('/api/auth/create-user', async (req, res) => {
 
         res.json({ success: true, message: 'User created successfully', data: { user_id: result.insertId, username, email, jwt_token: token } });
     } catch (error) {
-        console.error('❌ Create user error:', error);
-        res.status(500).json({ success: false, message: 'Error creating user', error: error.message });
+        handleError(error, res, 'create user from PKCE token');
     }
 });
 
 // Create app-user relationship
-app.post('/api/auth/create-app-user', verifyToken, async (req, res) => {
+app.post('/api/auth/create-app-user', csrfProtection, csrfCrossOrigin, verifyToken, async (req, res) => {
     try {
-        console.log('ℹ️  Create app-user request:', req.body);
-        const { email, app_key, user_app_role, url_redirect } = req.body;
+        const { email, app_key, user_app_role } = req.body;
+        console.log('ℹ️  Create app-user request for email:', email);
 
-        const [userRows] = await pool.execute('SELECT user_id, first_name, last_name, username FROM sa_users WHERE email = ?', [email]);
+        const [userRows] = await pool.execute('SELECT user_id, first_name, last_name, username, email, role FROM sa_users WHERE email = ?', [email]);
         if (userRows.length === 0) {
             console.error('❌ User not found for email:', email);
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
         const user = userRows[0];
-        console.log('ℹ️  Found user:', user);
+        console.log('ℹ️  Found user:', user.user_id, user.username);
 
         const [appRows] = await pool.execute('SELECT application_id, redirect_URL, failure_URL FROM sa_applications WHERE app_key = ?', [app_key]);
         if (appRows.length === 0) {
@@ -1834,28 +2263,38 @@ app.post('/api/auth/create-app-user', verifyToken, async (req, res) => {
         }
 
         const app = appRows[0];
-        console.log('ℹ️  Found application:', app);
+        console.log('ℹ️  Found application:', app.application_id);
 
         console.log('ℹ️  Inserting sa_app_user record:', { application_id: app.application_id, user_id: user.user_id });
         await pool.execute('INSERT INTO sa_app_user (application_id, user_id, status, track_user, app_role) VALUES (?, ?, "Active", "No", "Member")', [app.application_id, user.user_id]);
         console.log('✅ sa_app_user record created successfully');
 
-        let redirectUrl = url_redirect === 'redirect_URL' ? app.redirect_URL : app.failure_URL;
-        if (url_redirect === 'redirect_URL' && redirectUrl) {
-            const userData = { user_id: user.user_id, username: user.username, email, first_name: user.first_name, last_name: user.last_name };
+        // Always use redirect_URL from database, not from request
+        let redirectUrl = app.redirect_URL;
+        if (redirectUrl) {
+            const userData = { 
+                id: user.user_id, 
+                userId: user.user_id,
+                email: user.email,
+                username: user.username,
+                first_name: user.first_name, 
+                last_name: user.last_name,
+                roles: [user.role],
+                permissions: []
+            };
             const pkceToken = Buffer.from(JSON.stringify(userData)).toString('base64');
-            redirectUrl += (redirectUrl.includes('?') ? '&' : '?') + `pkce=${pkceToken}`;
+            const appToken = security.signAuthToken({ ...userData, exp: Date.now() + (24 * 60 * 60 * 1000) });
+            redirectUrl += (redirectUrl.includes('?') ? '&' : '?') + `pkce=${pkceToken}&app_token=${encodeURIComponent(appToken)}`;
         }
 
         res.json({ success: true, message: 'App-user relationship created successfully', data: { redirect_url: redirectUrl } });
     } catch (error) {
-        console.error('❌ Create app-user error:', error);
-        res.status(500).json({ success: false, message: 'Error creating app-user relationship', error: error.message });
+        handleError(error, res, 'create app-user relationship');
     }
 });
 
 // Update password after security verification - PUBLIC ACCESS (no CSRF protection)
-app.post('/api/auth/update-password', async (req, res) => {
+app.post('/api/auth/update-password', csrfProtection, csrfCrossOrigin, async (req, res) => {
     try {
         const { username, newPassword } = req.body;
 
@@ -1866,10 +2305,11 @@ app.post('/api/auth/update-password', async (req, res) => {
             });
         }
 
-        if (newPassword.length < 8) {
+        const passwordStrength = security.validatePasswordStrength(newPassword);
+        if (!passwordStrength.valid) {
             return res.status(400).json({
                 success: false,
-                message: 'Password must be at least 8 characters long'
+                message: passwordStrength.errors.join('. ')
             });
         }
 
@@ -1887,6 +2327,7 @@ app.post('/api/auth/update-password', async (req, res) => {
             });
         }
 
+        security.auditLog('PASSWORD_RESET', { username, ip: req.ip });
         console.log(`ℹ️  Password updated for user: ${username}`);
 
         res.json({
@@ -1895,12 +2336,269 @@ app.post('/api/auth/update-password', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error updating password:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update password'
-        });
+        handleError(error, res, 'update password');
     }
+});
+
+// SMTP Configuration endpoints
+app.get('/api/sms-providers', adminAccess, async (req, res) => {
+    const providersPath = path.join(__dirname, '../data/sms-providers.json');
+    
+    // Validate path to prevent traversal
+    const resolvedPath = path.resolve(providersPath);
+    const baseDir = path.resolve(__dirname, '../data');
+    if (!resolvedPath.startsWith(baseDir) || !resolvedPath.endsWith('sms-providers.json')) {
+        return res.status(400).json({ success: false, message: 'Invalid file path' });
+    }
+    
+    try {
+        const content = await fs.readFile(resolvedPath, 'utf8');
+        const data = safeJsonParse(content, {});
+        res.json(data);
+    } catch (error) {
+        handleError(error, res, 'load SMS providers', 500, 'Failed to load SMS providers');
+    }
+});
+
+app.post('/api/test-2fa', csrfProtection, csrfCrossOrigin, adminAccess, async (req, res) => {
+    let transporter;
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ success: false, message: 'No email specified' });
+        }
+        const smtpPath = path.join(__dirname, '.env.SMTP');
+        const smtpContent = await fs.readFile(smtpPath, 'utf8');
+        const lines = smtpContent.split('\n');
+        const config = {};
+        const maxLines = 50;
+        const lineCount = Math.min(lines.length, maxLines);
+        for (let i = 0; i < lineCount; i++) {
+            const match = lines[i].match(/^([A-Z_]+)=([^\r\n]*)$/);
+            if (match) config[match[1]] = match[2].replace(/"/g, '');
+        }
+        const port = parseInt(config.SMTP_PORT);
+        const secure = port === 465;
+        transporter = nodemailer.createTransport({
+            host: config.SMTP_HOST,
+            port: port,
+            secure: secure,
+            auth: { user: config.SMTP_USER, pass: config.SMTP_PASSWORD },
+            tls: { rejectUnauthorized: true },
+            requireTLS: true
+        });
+        await transporter.sendMail({
+            from: config.SMTP_FROM_EMAIL,
+            to: email,
+            subject: 'SecureAccess 2-Factor Test',
+            text: 'SecureAccess 2-Factor Test Message.'
+        });
+        res.json({ success: true, message: 'Test message sent successfully' });
+    } catch (error) {
+        handleError(error, res, 'send 2FA test email', 500, error.message);
+    } finally {
+        if (transporter) {
+            transporter.close();
+        }
+    }
+});
+
+app.get('/api/smtp-config', adminAccess, async (req, res) => {
+    const smtpPath = path.join(__dirname, '.env.SMTP');
+    try {
+        const content = await fs.readFile(smtpPath, 'utf8');
+        res.json({ success: true, content });
+    } catch (error) {
+        handleError(error, res, 'load SMTP config', 500, 'Failed to load SMTP config');
+    }
+});
+
+app.post('/api/smtp-config', csrfProtection, csrfCrossOrigin, adminAccess, async (req, res) => {
+    const smtpPath = path.join(__dirname, '.env.SMTP');
+    
+    // Validate path to prevent traversal
+    if (smtpPath.includes('..') || smtpPath.includes('~')) {
+        return res.status(400).json({ success: false, message: 'Invalid file path' });
+    }
+    
+    const resolvedPath = path.resolve(smtpPath);
+    const baseDir = path.resolve(__dirname);
+    if (!resolvedPath.startsWith(baseDir)) {
+        return res.status(400).json({ success: false, message: 'Invalid file path' });
+    }
+    
+    // Additional check: ensure the resolved path ends with the expected filename
+    if (!resolvedPath.endsWith('.env.SMTP')) {
+        return res.status(400).json({ success: false, message: 'Invalid file path' });
+    }
+    
+    try {
+        const content = req.body.content;
+        
+        // Validate content is a string
+        if (typeof content !== 'string') {
+            return res.status(400).json({ success: false, message: 'Invalid content type' });
+        }
+        
+        // Validate content length first to prevent ReDoS attacks
+        if (content.length > 10000) {
+            return res.status(400).json({ success: false, message: 'Content too large' });
+        }
+        
+        // Validate content only contains allowed characters for .env file
+        // Allow alphanumeric, common punctuation, and whitespace for SMTP config
+        // Note: Content length is validated above to prevent ReDoS
+        const allowedCharsRegex = /^[A-Za-z0-9_=@.\-:\/\s\n"'#]+$/;
+        if (!allowedCharsRegex.test(content)) {
+            return res.status(400).json({ success: false, message: 'Invalid characters in content' });
+        }
+        
+        // Prevent null byte injection
+        if (content.includes('\0') || content.includes('%00')) {
+            return res.status(400).json({ success: false, message: 'Invalid content' });
+        }
+        
+        // Validate content structure: each non-empty line must be KEY=VALUE format
+        const contentLines = content.split('\n');
+        const envLineRegex = /^[A-Z_]+=[^\r\n]*$/;
+        for (const line of contentLines) {
+            const trimmedLine = line.trim();
+            // Validate line length to prevent ReDoS
+            if (trimmedLine.length > 500) {
+                return res.status(400).json({ success: false, message: 'Line too long in .env file' });
+            }
+            if (trimmedLine && !trimmedLine.startsWith('#') && !envLineRegex.test(trimmedLine)) {
+                return res.status(400).json({ success: false, message: 'Invalid .env file format' });
+            }
+        }
+        
+        // Write file with restricted permissions (read/write for owner only, no execute)
+        await fs.writeFile(resolvedPath, content, { encoding: 'utf8', mode: 0o600 });
+        res.json({ success: true, message: 'SMTP config saved' });
+    } catch (error) {
+        handleError(error, res, 'save SMTP config', 500, 'Failed to save SMTP config');
+    }
+});
+
+app.post('/api/smtp-test', csrfProtection, csrfCrossOrigin, adminAccess, async (req, res) => {
+    let transporter;
+    try {
+        const { content, testEmail } = req.body;
+        const lines = content.split('\n');
+        const config = {};
+        const maxLines = 50;
+        const lineCount = Math.min(lines.length, maxLines);
+        for (let i = 0; i < lineCount; i++) {
+            const match = lines[i].match(/^([A-Z_]+)=([^\r\n]*)$/);
+            if (match) config[match[1]] = match[2].replace(/"/g, '');
+        }
+        const port = parseInt(config.SMTP_PORT);
+        const secure = port === 465;
+        transporter = nodemailer.createTransport({
+            host: config.SMTP_HOST,
+            port: port,
+            secure: secure,
+            auth: { user: config.SMTP_USER, pass: config.SMTP_PASSWORD },
+            tls: { rejectUnauthorized: true },
+            requireTLS: true
+        });
+        await transporter.verify();
+        if (testEmail) {
+            await transporter.sendMail({
+                from: config.SMTP_FROM_EMAIL,
+                to: testEmail,
+                subject: 'SMTP Test Message',
+                text: 'This is a test email from SecureAccess SMTP configuration.'
+            });
+        }
+        res.json({ success: true, message: 'SMTP connection successful' });
+    } catch (error) {
+        handleError(error, res, 'test SMTP connection', 500, error.message);
+    } finally {
+        if (transporter) {
+            transporter.close();
+        }
+    }
+});
+
+// Generate backup codes for user
+app.post('/api/users/:id/backup-codes', csrfProtection, csrfCrossOrigin, adminAccess, async (req, res) => {
+    try {
+        const userId = parseInt(req.params.id);
+        
+        // Generate new backup codes
+        const codes = generateBackupCodes();
+        const hashedCodes = await hashBackupCodes(codes);
+        
+        // Store hashed codes in database
+        await pool.execute(
+            'UPDATE sa_users SET backup_codes = ? WHERE user_id = ?',
+            [JSON.stringify(hashedCodes), userId]
+        );
+        
+        security.auditLog('BACKUP_CODES_GENERATED', { userId, ip: req.ip });
+        
+        // Return plain codes to admin (only time they're visible)
+        res.json({
+            success: true,
+            message: 'Backup codes generated successfully',
+            codes: codes
+        });
+    } catch (error) {
+        handleError(error, res, 'generate backup codes');
+    }
+});
+
+// Get audit logs (admin only)
+app.get('/api/admin/audit-logs', adminAccess, (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 100;
+        const logs = security.getAuditLogs(limit);
+        
+        res.json({
+            success: true,
+            data: logs
+        });
+    } catch (error) {
+        handleError(error, res, 'fetch audit logs');
+    }
+});
+
+// Health check endpoint (no CSRF needed)
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        database: 'connected'
+    });
+});
+
+app.get('/csrf-token', csrfProtection, (req, res) => {
+    res.json({ csrfToken: req.csrfToken() });
+});
+
+// Suppress Chrome DevTools 404 error
+app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
+    res.status(204).end();
+});
+
+// API health check
+app.get('/api', (req, res) => {
+    res.json({
+        status: 'OK',
+        message: 'SecureAccess API is running',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Config endpoint
+app.get('/config', verifyToken, (req, res) => {
+    res.json({
+        port: PORT,
+        host: HOST,
+        environment: NODE_ENV,
+        apiBaseUrl: `${BASE_URL}/api`
+    });
 });
 
 function listRoutes() {
@@ -1918,6 +2616,7 @@ function listRoutes() {
 async function startServer() {
     try {
         await initDatabase();
+        await initRedis();
 
         listRoutes()
 
@@ -1943,6 +2642,13 @@ let server;
 async function gracefulShutdown(signal) {
     console.log(`\nℹ️  Received ${signal}. Shutting down server...`);
 
+    // Clear cleanup interval
+    if (cleanupInterval) {
+        clearInterval(cleanupInterval);
+        cleanupInterval = null;
+        console.log('🛑 Cleanup interval cleared');
+    }
+
     if (server) {
         server.close(() => {
             console.log('🛑 HTTP server closed');
@@ -1950,8 +2656,21 @@ async function gracefulShutdown(signal) {
     }
 
     if (pool) {
-        await pool.end();
-        console.log('🛑 Database connections closed');
+        try {
+            await pool.end();
+            console.log('🛑 Database connections closed');
+        } catch (error) {
+            console.error('Error closing database:', error.message);
+        }
+    }
+    
+    if (redisClient && useRedis) {
+        try {
+            await redisClient.quit();
+            console.log('🛑 Redis connection closed');
+        } catch (error) {
+            console.error('Error closing Redis:', error.message);
+        }
     }
 
     process.exit(0);

@@ -2,24 +2,27 @@ var _FVARS = {
     "PROJECT_NO":           "55",
     "PROJECT_NAME":         "SAS",
     "PROJECT_VERSION":      "1.02" , 
-    "CLIENT_PORT":          "55301",
-    "CLIENT_HOST":          "http://localhost:55301",
-    "SERVER_PORT":          "55351",
-    "SERVER_API_URL":       "http://localhost:55351/api", 
+    "CLIENT_PORT":          "55101",
+    "CLIENT_HOST":          "http://localhost:55101",
+    "SERVER_PORT":          "55151",
+    "SERVER_API_URL":       "http://localhost:55151/api", 
 
-    "LOCAL_HOST":           "http://localhost:55301",
-    "LOCAL_API_URL":        "http://localhost:55351/api",
-//  "REMOTE_API_URL":       "https://92.112.184.206:55351/api",
+    "LOCAL_HOST":           "http://localhost:55101",
+    "LOCAL_API_URL":        "http://localhost:55151/api",
+//  "REMOTE_API_URL":       "https://92.112.184.206:55151/api",
     "REMOTE_API_URL":       "https://secureaccess247/api",                                        
     "SERVER_LOCATION":      "Local",
 
-    "SECURE_HOST":          "http://localhost:55351", 
-    "SECURE_API_URL":       "http://localhost:55351/api", 
+    "SECURE_HOST":          "http://localhost:55151", 
+    "SECURE_API_URL":       "http://localhost:55151/api", 
 
     "CORS_ORIGINS": [
-      "http://localhost:55301",
-      "http://",
-      "http://127.0.0.1:55301"
+      "http://localhost:55101",
+      "http://127.0.0.1:55101",
+      "http://localhost:55151",
+      "http://127.0.0.1:55151",
+//    "https://secureaccess247.com",
+       ]
        ]
      }
   if (typeof(window)  != 'undefined') {  window.FVARS  = _FVARS; var aGlobal = "window"  }

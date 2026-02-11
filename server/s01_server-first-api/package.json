@@ -1,13 +1,23 @@
 {
-  "name": "secureaccess_dev01-alan_s01_server-first-api",
+  "name": "@secureaccess/server-first-api",
   "version": "1.02",
+  "private": true,
   "description": "Express API server for user management",
-  "keywords": ["express", "mysql", "api", "users"],
+  "keywords": [
+    "express",
+    "mysql",
+    "api",
+    "users"
+  ],
   "author": "",
   "license": "MIT",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "nodemailer": "^7.0.13",
+    "redis": "^5.10.0"
   }
-}  
+}

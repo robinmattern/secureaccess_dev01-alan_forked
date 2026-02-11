@@ -39,7 +39,8 @@ const authenticateToken = async (req, res, next) => {
     
     next();
   } catch (error) {
-    console.error('Authentication error:', error);
+    const errorMessage = error && error.message ? error.message : 'Unknown error';
+    console.error('Authentication error:', errorMessage);
     res.status(401).json({
       success: false,
       message: error.message || 'Invalid or expired token'
@@ -66,8 +67,8 @@ const optionalAuth = async (req, res, next) => {
           version: verifiedToken.version
         };
       } catch (error) {
-        // Token invalid, but continue without user
-        console.log('Optional auth failed:', error.message);
+        const errorMessage = error && error.message ? error.message : 'Unknown error';
+        console.log('Optional auth failed:', errorMessage);
       }
     }
     
@@ -99,7 +100,8 @@ const authorize = (roles = []) => {
       
       next();
     } catch (error) {
-      console.error('Authorization error:', error);
+      const errorMessage = error && error.message ? error.message : 'Unknown error';
+      console.error('Authorization error:', errorMessage);
       res.status(403).json({
         success: false,
         message: 'Insufficient permissions'

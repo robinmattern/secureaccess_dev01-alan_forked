@@ -15,7 +15,7 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 15px;
         }
 
         .container {
@@ -30,13 +30,13 @@
         .header {
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
-            padding: 30px;
+            padding: 20px;
             text-align: center;
         }
 
         .header h1 {
-            font-size: 28px;
-            margin-bottom: 8px;
+            font-size: 24px;
+            margin-bottom: 0;
         }
 
         .header p {
@@ -45,11 +45,11 @@
         }
 
         .content {
-            padding: 30px;
+            padding: 20px;
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .form-row {
@@ -71,7 +71,7 @@
 
         input, select {
             width: 100%;
-            padding: 12px 15px;
+            padding: 10px 12px;
             border: 2px solid #e1e5e9;
             border-radius: 8px;
             font-size: 14px;
@@ -184,8 +184,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 30px;
-            padding-top: 20px;
+            margin-top: 20px;
+            padding-top: 15px;
             border-top: 1px solid #e1e5e9;
         }
 
@@ -200,15 +200,19 @@
             }
             
             .header {
-                padding: 20px;
+                padding: 15px;
             }
             
             .header h1 {
-                font-size: 24px;
+                font-size: 20px;
             }
             
             .content {
-                padding: 20px;
+                padding: 15px;
+            }
+            
+            .form-group {
+                margin-bottom: 12px;
             }
             
             .form-row {
@@ -219,6 +223,8 @@
             .actions {
                 flex-direction: column;
                 gap: 10px;
+                margin-top: 15px;
+                padding-top: 12px;
             }
             
             .actions > div {
@@ -237,19 +243,23 @@
             }
             
             .header {
-                padding: 15px;
+                padding: 12px;
             }
             
             .header h1 {
-                font-size: 20px;
+                font-size: 18px;
             }
             
             .content {
-                padding: 15px;
+                padding: 12px;
+            }
+            
+            .form-group {
+                margin-bottom: 10px;
             }
             
             input, select {
-                padding: 10px 12px;
+                padding: 8px 10px;
                 font-size: 16px;
             }
         }
@@ -273,28 +283,28 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="firstName">First Name</label>
-                        <input type="text" id="firstName" name="firstName" required>
+                        <input type="text" id="firstName" name="firstName" autocomplete="given-name" required>
                     </div>
                     <div class="form-group">
                         <label for="lastName">Last Name</label>
-                        <input type="text" id="lastName" name="lastName" required>
+                        <input type="text" id="lastName" name="lastName" autocomplete="family-name" required>
                     </div>
                 </div>
 
                 <div class="form-group">
                     <label for="username">Username</label>
-                    <input type="text" id="username" name="username" required>
+                    <input type="text" id="username" name="username" autocomplete="username" required>
                 </div>
 
                 <div class="form-group">
                     <label for="email">Email</label>
-                    <input type="email" id="email" name="email" required>
+                    <input type="email" id="email" name="email" autocomplete="email" required>
                 </div>
 
                 <div class="form-group">
                     <label for="password">New Password (leave empty to keep current)</label>
                     <div class="password-container">
-                        <input type="password" id="password" name="password" placeholder="Enter new password" minlength="8">
+                        <input type="password" id="password" name="password" autocomplete="new-password" placeholder="Enter new password" minlength="8">
                         <span class="password-toggle" onclick="togglePassword('password')">👁️</span>
                     </div>
                 </div>
@@ -302,35 +312,35 @@
                 <div class="form-group">
                     <label for="confirmPassword">Confirm New Password</label>
                     <div class="password-container">
-                        <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Confirm new password">
+                        <input type="password" id="confirmPassword" name="confirmPassword" autocomplete="new-password" placeholder="Confirm new password">
                         <span class="password-toggle" onclick="togglePassword('confirmPassword')">👁️</span>
                     </div>
                 </div>
 
                 <div class="form-group">
                     <label for="securityQuestion1">Security Question 1</label>
-                    <input type="text" id="securityQuestion1" name="securityQuestion1" placeholder="Enter your security question">
+                    <input type="text" id="securityQuestion1" name="securityQuestion1" autocomplete="off" placeholder="Enter your security question">
                 </div>
 
                 <div class="form-group">
                     <label for="securityAnswer1">Security Answer 1 (leave empty to keep current)</label>
-                    <input type="text" id="securityAnswer1" name="securityAnswer1" placeholder="Enter your answer">
+                    <input type="text" id="securityAnswer1" name="securityAnswer1" autocomplete="off" placeholder="Enter your answer">
                 </div>
 
                 <div class="form-group">
                     <label for="securityQuestion2">Security Question 2</label>
-                    <input type="text" id="securityQuestion2" name="securityQuestion2" placeholder="Enter your security question">
+                    <input type="text" id="securityQuestion2" name="securityQuestion2" autocomplete="off" placeholder="Enter your security question">
                 </div>
 
                 <div class="form-group">
                     <label for="securityAnswer2">Security Answer 2 (leave empty to keep current)</label>
-                    <input type="text" id="securityAnswer2" name="securityAnswer2" placeholder="Enter your answer">
+                    <input type="text" id="securityAnswer2" name="securityAnswer2" autocomplete="off" placeholder="Enter your answer">
                 </div>
 
                 <div class="actions">
                     <div>
                         <button type="submit" class="btn btn-primary">Update Profile</button>
-                        <button type="button" class="btn btn-secondary" onclick="goBack()">Back to Application Launcher</button>
+                        <button type="button" class="btn btn-secondary" onclick="goBack()">Return to Application Launcher</button>
                     </div>
                 </div>
             </form>
@@ -339,263 +349,6 @@
 
     <script src="./_config.js"></script>
     <script src="shared-functions.js"></script>
-    <script>
-        let API_BASE_URL = window.FVARS?.SECURE_API_URL || window.location.origin + '/api';
-        let authToken = null;
-        let currentUser = null;
-
-        // Get URL parameters
-        function getUrlParams() {
-            const params = new URLSearchParams(window.location.search);
-            return {
-                auth_token: params.get('auth_token'),
-                user_id: params.get('user_id'),
-                username: params.get('username'),
-                email: params.get('email'),
-                role: params.get('role')
-            };
-        }
-
-        // Password visibility toggle
-        function togglePassword(inputId) {
-            const input = document.getElementById(inputId);
-            const toggle = input.nextElementSibling;
-
-            if (input.type === 'password') {
-                input.type = 'text';
-                toggle.textContent = '🙈';
-            } else {
-                input.type = 'password';
-                toggle.textContent = '👁️';
-            }
-        }
-
-        // Alert functions
-        function showAlert(message, type = 'error') {
-            const alert = document.getElementById('alert');
-            alert.textContent = message;
-            alert.className = `alert ${type} show`;
-
-            if (type === 'success') {
-                setTimeout(hideAlert, 5000);
-            }
-        }
-
-        function hideAlert() {
-            document.getElementById('alert').classList.remove('show');
-        }
-
-        // Loading state
-        function showLoading() {
-            document.getElementById('loading').classList.add('show');
-            document.querySelectorAll('.btn').forEach(btn => btn.disabled = true);
-        }
-
-        function hideLoading() {
-            document.getElementById('loading').classList.remove('show');
-            document.querySelectorAll('.btn').forEach(btn => btn.disabled = false);
-        }
-
-        // API call function with session authentication
-        async function apiCall(endpoint, method = 'GET', data = null) {
-            const adminSessionId = localStorage.getItem('adminSessionId');
-            const userSessionId = localStorage.getItem('userSessionId');
-            const sessionId = adminSessionId || userSessionId;
-            
-            console.log(`🌐 API Call: ${method} ${API_BASE_URL}${endpoint}`);
-            console.log('🔑 Admin Session ID:', adminSessionId);
-            console.log('🔑 User Session ID:', userSessionId);
-            console.log('🔑 Using Session ID:', sessionId);
-            
-            const options = {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${sessionId}`
-                },
-                credentials: 'include'
-            };
-
-            if (data) {
-                options.body = JSON.stringify(data);
-            }
-
-            try {
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-                console.log(`📡 Response status: ${response.status}`);
-                
-                if (!response.ok) {
-                    if (response.status === 401) {
-                        throw new Error('Session expired. Please login again.');
-                    } else if (response.status === 403) {
-                        throw new Error('Access denied.');
-                    }
-                    
-                    let errorMessage = `HTTP error! status: ${response.status}`;
-                    try {
-                        const errorData = await response.json();
-                        errorMessage = errorData.message || errorMessage;
-                    } catch (e) {
-                        // If response is not JSON, use default error message
-                    }
-                    throw new Error(errorMessage);
-                }
-
-                return await response.json();
-            } catch (error) {
-                console.error('🚨 API call error:', error);
-                if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                    throw new Error('Cannot connect to server.');
-                }
-                throw error;
-            }
-        }
-
-
-
-        // Update profile
-        async function updateProfile(formData) {
-            try {
-                showLoading();
-                
-                const updateData = {
-                    first_name: formData.get('firstName'),
-                    last_name: formData.get('lastName'),
-                    username: formData.get('username'),
-                    email: formData.get('email'),
-                    security_question_1: formData.get('securityQuestion1'),
-                    security_answer_1: formData.get('securityAnswer1'),
-                    security_question_2: formData.get('securityQuestion2'),
-                    security_answer_2: formData.get('securityAnswer2')
-                };
-
-                const password = formData.get('password');
-                if (password && password.trim()) {
-                    updateData.password = password;
-                }
-
-                const result = await apiCall('/users/me', 'PUT', updateData);
-                
-                if (result.success) {
-                    showAlert('Profile updated successfully!', 'success');
-                    // Clear password fields
-                    document.getElementById('password').value = '';
-                    document.getElementById('confirmPassword').value = '';
-                }
-            } catch (error) {
-                showAlert(error.message, 'error');
-            } finally {
-                hideLoading();
-            }
-        }
-
-        // Go back to app launcher
-        function goBack() {
-            window.location.href = 'app-launch.html';
-        }
-
-        // Form submission
-        document.getElementById('profileForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            hideAlert();
-
-            const formData = new FormData(e.target);
-            const password = formData.get('password');
-            const confirmPassword = formData.get('confirmPassword');
-
-            // Validate passwords match if provided
-            if (password && password !== confirmPassword) {
-                showAlert('Passwords do not match', 'error');
-                return;
-            }
-
-            await updateProfile(formData);
-        });
-
-        // Initialize page
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                console.log('🔍 Profile page initializing...');
-                
-                // Check if user has a session
-                const adminSessionId = localStorage.getItem('adminSessionId');
-                const userSessionId = localStorage.getItem('userSessionId');
-                const sessionId = userSessionId || adminSessionId;
-                
-                if (!sessionId) {
-                    console.log('❌ No session found, redirecting to login');
-                    showAlert('Please login to access your profile', 'error');
-                    setTimeout(() => {
-                        window.location.href = 'index.html';
-                    }, 2000);
-                    return;
-                }
-                
-                console.log('Using session ID:', sessionId);
-                
-                // Get dynamic configuration
-                try {
-                    if (window.FVARS?.SECURE_API_URL) {
-                        API_BASE_URL = window.FVARS.SECURE_API_URL;
-                    }
-                } catch (error) {
-                    console.warn('Could not get server config, using default');
-                }
-                
-                console.log('Using API URL:', API_BASE_URL);
-                console.log('Admin Session ID:', localStorage.getItem('adminSessionId'));
-                console.log('User Session ID:', localStorage.getItem('userSessionId'));
-                console.log('All localStorage keys:', Object.keys(localStorage));
-                console.log('All localStorage data:', JSON.stringify(localStorage));
-                console.log('Session ID found:', sessionId ? 'Yes' : 'No');
-                
-                // Check if we have any user data stored
-                console.log('Current user data:', currentUser);
-                
-                console.log('🍪 Loading user profile...');
-                
-                // Test: Try to get user data without session first
-                console.log('Testing API connection...');
-                
-                // Load profile directly - this will verify auth and get user data
-                const result = await apiCall('/users/me', 'GET');
-                console.log('✅ Profile loaded:', result);
-                
-                if (result.success) {
-                    const user = result.data;
-                    currentUser = {
-                        user_id: user.user_id,
-                        username: user.username,
-                        email: user.email,
-                        role: user.role
-                    };
-                    
-                    // Populate form immediately
-                    document.getElementById('firstName').value = user.first_name || '';
-                    document.getElementById('lastName').value = user.last_name || '';
-                    document.getElementById('username').value = user.username || '';
-                    document.getElementById('email').value = user.email || '';
-                    document.getElementById('securityQuestion1').value = user.security_question_1 || '';
-                    document.getElementById('securityQuestion2').value = user.security_question_2 || '';
-                    
-                    console.log('👤 Profile populated for user:', user.username);
-                } else {
-                    throw new Error('Failed to load profile');
-                }
-            } catch (error) {
-                console.error('❌ Authentication error:', error);
-                console.log('🍪 Current cookies:', document.cookie);
-                
-                // Clear invalid session and redirect to login
-                localStorage.removeItem('userSessionId');
-                localStorage.removeItem('adminSessionId');
-                
-                showAlert('Session invalid. Please login again.', 'error');
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 2000);
-            }
-        });
-    </script>
+    <script src="profile-page.js"></script>
 </body>
 </html>

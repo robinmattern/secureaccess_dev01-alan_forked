@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const speakeasy = require('speakeasy');
 const Joi = require('joi');
+const { handleError } = require('../utils/errorHandler');
 
 // Validation schemas
 const createUserSchema = Joi.object({
@@ -73,12 +74,7 @@ const getAllUsers = async (req, res) => {
       count: rows.length
     });
   } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch users',
-      error: error.message
-    });
+    handleError(error, res, 'fetch users');
   }
 };
 
@@ -119,12 +115,7 @@ const getUserById = async (req, res) => {
       data: rows[0]
     });
   } catch (error) {
-    console.error('Error fetching user:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch user',
-      error: error.message
-    });
+    handleError(error, res, 'fetch user');
   }
 };
 
@@ -171,6 +162,22 @@ const createUser = async (req, res) => {
     // Generate 2FA secret if enabled
     const two_factor_secret = two_factor_enabled ? generateTwoFactorSecret() : null;
 
+    const insertParams = [
+      first_name,
+      last_name,
+      username,
+      email,
+      master_password_hash,
+      salt,
+      security_question_1 || null,
+      security_answer_1_hash,
+      security_question_2 || null,
+      security_answer_2_hash,
+      two_factor_enabled ? 1 : 0,
+      two_factor_secret,
+      token_expiration_minutes
+    ];
+
     const [result] = await pool.execute(`
       INSERT INTO sa_users (
         first_name, last_name, username, email, master_password_hash, salt,
@@ -178,12 +185,7 @@ const createUser = async (req, res) => {
         security_question_2, security_answer_2_hash,
         two_factor_enabled, two_factor_secret, token_expiration_minutes
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      first_name, last_name, username, email, master_password_hash, salt,
-      security_question_1 || null, security_answer_1_hash,
-      security_question_2 || null, security_answer_2_hash,
-      two_factor_enabled ? 1 : 0, two_factor_secret, token_expiration_minutes
-    ]);
+    `, insertParams);
     
     // Fetch the created user (without sensitive data)
     const [newUser] = await pool.execute(`
@@ -218,20 +220,13 @@ const createUser = async (req, res) => {
     
     res.status(201).json(response);
   } catch (error) {
-    console.error('Error creating user:', error);
-    
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({
         success: false,
         message: 'Username or email already exists'
       });
     }
-    
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create user',
-      error: error.message
-    });
+    handleError(error, res, 'create user');
   }
 };
 
@@ -289,6 +284,14 @@ const updateUser = async (req, res) => {
     const updates = [];
     const values = [];
 
+    // Helper function to add simple field updates
+    const addUpdate = (field, dbColumn, value) => {
+      if (value !== undefined) {
+        updates.push(`${dbColumn} = ?`);
+        values.push(value);
+      }
+    };
+
     // Handle each field update
     const {
       first_name, last_name, username, email, password, account_status,
@@ -297,22 +300,15 @@ const updateUser = async (req, res) => {
       two_factor_enabled, token_expiration_minutes, toggleTwoFactor
     } = value;
 
-    if (first_name !== undefined) {
-      updates.push('first_name = ?');
-      values.push(first_name);
-    }
-    if (last_name !== undefined) {
-      updates.push('last_name = ?');
-      values.push(last_name);
-    }
-    if (username !== undefined) {
-      updates.push('username = ?');
-      values.push(username);
-    }
-    if (email !== undefined) {
-      updates.push('email = ?');
-      values.push(email);
-    }
+    addUpdate('first_name', 'first_name', first_name);
+    addUpdate('last_name', 'last_name', last_name);
+    addUpdate('username', 'username', username);
+    addUpdate('email', 'email', email);
+    addUpdate('account_status', 'account_status', account_status);
+    addUpdate('security_question_1', 'security_question_1', security_question_1);
+    addUpdate('security_question_2', 'security_question_2', security_question_2);
+    addUpdate('token_expiration_minutes', 'token_expiration_minutes', token_expiration_minutes);
+    
     if (password !== undefined) {
       const master_password_hash = await hashPassword(password, salt);
       updates.push('master_password_hash = ?');
@@ -320,22 +316,10 @@ const updateUser = async (req, res) => {
       // Increment JWT secret version on password change
       updates.push('jwt_secret_version = jwt_secret_version + 1');
     }
-    if (account_status !== undefined) {
-      updates.push('account_status = ?');
-      values.push(account_status);
-    }
-    if (security_question_1 !== undefined) {
-      updates.push('security_question_1 = ?');
-      values.push(security_question_1);
-    }
     if (security_answer_1 !== undefined) {
       const security_answer_1_hash = await hashSecurityAnswer(security_answer_1, salt);
       updates.push('security_answer_1_hash = ?');
       values.push(security_answer_1_hash);
-    }
-    if (security_question_2 !== undefined) {
-      updates.push('security_question_2 = ?');
-      values.push(security_question_2);
     }
     if (security_answer_2 !== undefined) {
       const security_answer_2_hash = await hashSecurityAnswer(security_answer_2, salt);
@@ -372,11 +356,6 @@ const updateUser = async (req, res) => {
         updates.push('two_factor_secret = ?');
         values.push(null);
       }
-    }
-
-    if (token_expiration_minutes !== undefined) {
-      updates.push('token_expiration_minutes = ?');
-      values.push(token_expiration_minutes);
     }
     
     if (updates.length === 0) {
@@ -428,20 +407,13 @@ const updateUser = async (req, res) => {
     
     res.json(responseData);
   } catch (error) {
-    console.error('Error updating user:', error);
-    
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({
         success: false,
         message: 'Username or email already exists'
       });
     }
-    
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update user',
-      error: error.message
-    });
+    handleError(error, res, 'update user');
   }
 };
 
@@ -467,12 +439,7 @@ const updateLastLogin = async (req, res) => {
       message: 'Last login timestamp updated successfully'
     });
   } catch (error) {
-    console.error('Error updating last login:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update last login timestamp',
-      error: error.message
-    });
+    handleError(error, res, 'update last login');
   }
 };
 
@@ -495,12 +462,7 @@ const deleteUser = async (req, res) => {
       message: 'User deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting user:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete user',
-      error: error.message
-    });
+    handleError(error, res, 'delete user');
   }
 };
 
@@ -528,12 +490,7 @@ const getUserSecurity = async (req, res) => {
       data: rows[0]
     });
   } catch (error) {
-    console.error('Error fetching user security info:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch user security information',
-      error: error.message
-    });
+    handleError(error, res, 'fetch user security info');
   }
 };
 

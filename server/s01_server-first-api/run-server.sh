@@ -21,15 +21,15 @@ if [ "$1" != "" ]; then
     if [ "${OS:0:3}" != "Win" ]; then echo ""; fi; exit;  
     }
 
-  if [ "$1" == "help"   ]; then Help; exit; fi; bOk=0 
-  if [ "$1" == "local"  ]; then aCmd=$1; bOk=1; fi 
-  if [ "$1" == "remote" ]; then aCmd=$1; bOk=1; fi 
-  if [ "$1" == "custom" ]; then aCmd=$1; bOk=1; fi 
-  if [ "$1" == "set"    ]; then aCmd=$1; bOk=1; fi 
-  if [ "$1" == ""       ]; then aCmd="same"; bOk=1; fi 
-  if [ "${bOk}" != "1"  ]; then Help $1; exit; fi; 
+  if [ "$1" == "help"   ]; then Help; exit; fi; bOK=0 
+  if [ "$1" == "local"  ]; then aCmd=$1; bOK=1; fi 
+  if [ "$1" == "remote" ]; then aCmd=$1; bOK=1; fi 
+  if [ "$1" == "custom" ]; then aCmd=$1; bOK=1; fi 
+  if [ "$1" == "set"    ]; then aCmd=$1; bOK=1; fi 
+  if [ "$1" == ""       ]; then aCmd="same"; bOK=1; fi 
+  if [ "${bOK}" != "1"  ]; then Help $1; exit; fi; 
 
-  if [ "${aCmd}" == "set"  ]; then aCmd="$2"; bOk=1; fi 
+  if [ "${aCmd}" == "set"  ]; then aCmd="$2"; bOK=1; fi 
   if [ "${aCmd}" == "same" ]; then echo "not copying .env"; bOK=1; fi 
   if [ "${aCmd}" != "same" ]; then 
     echo -e "\n  Copying ./api/.env-${aCmd}.env to ./api/.env"
@@ -38,9 +38,7 @@ if [ "$1" != "" ]; then
     fi 
  
           aPath="$(realpath "$0")"; aPath="${aPath/\/run-server/}";  # echo "  ${aPath}"
-    cd "${aPath}"
-
-   if [ "${bOK}" != "1" ]; then Help $1; fi 
+    cd "${aPath}" 
 
           NODEMON="../node_modules/.bin/nodemon"; NODEMON=$( ls -1 "${NODEMON}" );  echo "NODEMON: ${NODEMON}"; # exit 
 # if [ ! -f "${NODEMON}" ]; then NODEMON=node; fi
@@ -51,8 +49,8 @@ if [ "$1" != "" ]; then
 #echo    "  ${aPath}"
 #echo    ""
 #exit
-        bOK=$(        which chrome 2>/dev/null)
-if [ "${bOK}" != "" ]; then chrome  "http://localhost:${aPort}"; fi
+        chromePath=$(which chrome 2>/dev/null)
+if [ "${chromePath}" != "" ]; then chrome  "http://localhost:${aPort}"; fi
 
 echo "${NODEMON}" ${aSvr}  ${aPort}
      "${NODEMON}" ${aSvr}  ${aPort}

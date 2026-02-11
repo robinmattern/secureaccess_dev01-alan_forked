@@ -1,4 +1,0 @@
-{ "port": 57303 ,
-  "root": "client/c03_register-cors-app",
-  "open": "index.html"
-}

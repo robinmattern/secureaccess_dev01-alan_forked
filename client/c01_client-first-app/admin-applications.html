@@ -244,6 +244,23 @@
             color: #764ba2;
         }
 
+        .input-with-button {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .input-with-button input {
+            flex: 1;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+            min-width: auto;
+            white-space: nowrap;
+        }
+
         .action-buttons {
             padding: 12px;
             background: #f8f9fa;
@@ -429,7 +446,7 @@
                                 <div class="form-group full-width">
                                     <label for="redirectURL">Redirect URL</label>
                                     <div class="url-input-container">
-                                        <input type="url" id="redirectURL" name="redirect_URL" placeholder="https://example.com/redirect">
+                                        <input type="text" id="redirectURL" name="redirect_URL" placeholder="https://example.com/redirect">
                                         <span class="url-icon" onclick="openRedirectURL()" title="Open URL in new tab">🔗</span>
                                     </div>
                                 </div>
@@ -438,7 +455,7 @@
                                 <div class="form-group full-width">
                                     <label for="failureURL">Failure URL</label>
                                     <div class="url-input-container">
-                                        <input type="url" id="failureURL" name="failure_URL" placeholder="https://example.com/failure">
+                                        <input type="text" id="failureURL" name="failure_URL" placeholder="https://example.com/failure">
                                         <span class="url-icon" onclick="openFailureURL()" title="Open URL in new tab">🔗</span>
                                     </div>
                                 </div>
@@ -482,7 +499,7 @@
                                 </div>
                                 <div class="form-group">
                                     <div class="param-group">
-                                        <label for="parmPKCE">Send PKCE Token</label>
+                                        <label for="parmPKCE">Send Auth_Token</label>
                                         <select id="parmPKCE" name="parm_PKCE">
                                             <option value="No" selected>No</option>
                                             <option value="Yes">Yes</option>
@@ -497,9 +514,10 @@
                             <h3>Application Information</h3>
                             <div class="form-row">
                                 <div class="form-group">
-                                    <div class="date-display">
-                                        <label>Application Key:</label>
-                                        <span class="date-value" id="appKey">NULL</span>
+                                    <label>Application Key:</label>
+                                    <div class="input-with-button">
+                                        <input type="text" id="appKey" name="app_key" readonly>
+                                        <button type="button" class="btn btn-secondary btn-small" id="newAppKeyBtn">New App Key</button>
                                     </div>
                                 </div>
                             </div>
@@ -527,516 +545,16 @@
         <!-- Action Buttons -->
         <div class="action-buttons">
             <button type="button" class="btn btn-primary" id="addAppBtn">Add</button>
-            <button type="button" class="btn btn-danger" id="deleteBtn" disabled>Delete</button>
-            <button type="button" class="btn btn-success" id="submitBtn" disabled>Submit</button>
-            <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
-            <button type="button" class="btn btn-secondary" id="returnBtn">Return</button>
+            <button type="button" class="btn btn-primary" id="deleteBtn" disabled>Delete</button>
+            <button type="button" class="btn btn-primary" id="submitBtn" disabled>Save</button>
+            <button type="button" class="btn btn-primary" id="cancelBtn">Cancel</button>
+            <button type="button" class="btn btn-primary" id="returnBtn">Return</button>
         </div>
     </div>
 
     <script src="./_config.js"></script>
-    <script>
-        // acm_Prompts.js inline
-        const ACM_APP_TITLE = 'SecureAccess';
-        
-        function acm_SecurePopUp(message, ...buttonDefinitions) {
-            return new Promise((resolve, reject) => {
-                const WindowCaption = ACM_APP_TITLE;
-                if (typeof message !== 'string' || message.trim() === '') {
-                    reject(new Error('Message must be a non-empty string'));
-                    return;
-                }
-                if (buttonDefinitions.length === 0) {
-                    reject(new Error('At least one button must be defined'));
-                    return;
-                }
-                if (buttonDefinitions.length > 10) {
-                    reject(new Error('Maximum 10 buttons allowed'));
-                    return;
-                }
-                const buttons = [];
-                for (let i = 0; i < buttonDefinitions.length; i++) {
-                    const buttonDef = buttonDefinitions[i];
-                    if (typeof buttonDef !== 'string') {
-                        reject(new Error(`Button definition ${i + 1} must be a string`));
-                        return;
-                    }
-                    const parts = buttonDef.split(':');
-                    if (parts.length !== 2) {
-                        reject(new Error(`Invalid button format at position ${i + 1}. Use "Label : Value"`));
-                        return;
-                    }
-                    const label = parts[0].trim();
-                    const value = parts[1].trim();
-                    if (label === '' || value === '') {
-                        reject(new Error(`Button label and value cannot be empty at position ${i + 1}`));
-                        return;
-                    }
-                    if (!/^[\w\s\-.,!?()]+$/.test(label)) {
-                        reject(new Error(`Button label contains invalid characters at position ${i + 1}`));
-                        return;
-                    }
-                    buttons.push({ label, value });
-                }
-                const overlay = document.createElement('div');
-                const modal = document.createElement('div');
-                const titleDiv = document.createElement('div');
-                const messageDiv = document.createElement('div');
-                const buttonsContainer = document.createElement('div');
-                overlay.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 999999; display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif;`;
-                modal.style.cssText = `background: white; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); max-width: 500px; min-width: 300px; padding: 0; margin: 20px; max-height: 80vh; overflow: hidden;`;
-                titleDiv.style.cssText = `padding: 20px 24px 12px 24px; font-size: 18px; font-weight: bold; color: #333; border-bottom: 1px solid #eee; background: #e3f2fd;`;
-                titleDiv.textContent = WindowCaption;
-                messageDiv.style.cssText = `padding: 16px 24px; font-size: 16px; line-height: 1.5; color: #333; word-wrap: break-word;`;
-                if (message.length > 1000) message = message.substring(0, 1000);
-                messageDiv.textContent = message;
-                buttonsContainer.style.cssText = `padding: 16px 24px 24px 24px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;`;
-                buttons.forEach((button, index) => {
-                    const btn = document.createElement('button');
-                    btn.textContent = button.label;
-                    btn.setAttribute('data-value', button.value);
-                    btn.setAttribute('type', 'button');
-                    btn.style.cssText = `background: ${index === 0 ? '#007bff' : '#6c757d'}; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; min-width: 70px;`;
-                    btn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const selectedValue = btn.getAttribute('data-value');
-                        cleanup();
-                        resolve(selectedValue);
-                    });
-                    buttonsContainer.appendChild(btn);
-                });
-                function cleanup() {
-                    if (overlay && overlay.parentNode) {
-                        overlay.parentNode.removeChild(overlay);
-                    }
-                }
-                modal.appendChild(titleDiv);
-                modal.appendChild(messageDiv);
-                modal.appendChild(buttonsContainer);
-                overlay.appendChild(modal);
-                document.body.appendChild(overlay);
-            });
-        }
-        let API_BASE_URL = window.FVARS.SECURE_API_URL;
-        
-        // State management
-        let applications = [];
-        let selectedApplication = null;
-        let isEditing = false;
-        let isNewApplication = false;
-
-        // DOM elements
-        const appGrid = document.getElementById('appGrid');
-        const formContainer = document.getElementById('formContainer');
-        const formLoading = document.getElementById('formLoading');
-        const applicationForm = document.getElementById('applicationForm');
-        const alertElement = document.getElementById('alert');
-        const addAppBtn = document.getElementById('addAppBtn');
-        const deleteBtn = document.getElementById('deleteBtn');
-        const submitBtn = document.getElementById('submitBtn');
-        const cancelBtn = document.getElementById('cancelBtn');
-        const returnBtn = document.getElementById('returnBtn');
-
-        // Helper functions
-        async function redirectToLogin(message) {
-            localStorage.removeItem('adminSessionId');
-            const result = await acm_SecurePopUp(message, "OK:ok");
-            window.location.href = 'index.html';
-        }
-
-        // API functions with session authentication
-        async function apiCall(endpoint, method = 'GET', data = null) {
-            const sessionId = localStorage.getItem('adminSessionId');
-            
-            const options = {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${sessionId}`,
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                credentials: 'include'
-            };
-
-            if (data) {
-                options.body = JSON.stringify(data);
-            }
-
-            try {
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-                
-                if (!response.ok) {
-                    if (response.status === 401) {
-                        redirectToLogin('Session expired. Please login again.');
-                        return;
-                    } else if (response.status === 403) {
-                        redirectToLogin('Access denied. Admin privileges required.');
-                        return;
-                    }
-                    
-                    let errorMessage = `HTTP error! status: ${response.status}`;
-                    try {
-                        const errorData = await response.json();
-                        errorMessage = errorData.message || errorMessage;
-                    } catch (e) {
-                        // If response is not JSON, use default error message
-                    }
-                    throw new Error(errorMessage);
-                }
-                
-                return await response.json();
-            } catch (error) {
-                console.error('API call failed:', error);
-                
-                if (error.message.includes('fetch')) {
-                    throw new Error('Cannot connect to server. Please check if the server is running.');
-                }
-                
-                throw error;
-            }
-        }
-
-        function showAlert(message, type = 'error') {
-            alertElement.textContent = message;
-            alertElement.className = `alert ${type} show`;
-            
-            if (type === 'success') {
-                setTimeout(() => {
-                    alertElement.classList.remove('show');
-                }, 3000);
-            }
-        }
-
-        function hideAlert() {
-            alertElement.classList.remove('show');
-        }
-
-        /*
-        // Open application URL in new tab
-        function openApplicationURL() {
-            const url = document.getElementById('applicationURL').value.trim();
-            if (url) {
-                // Add protocol if missing
-                const fullUrl = url.startsWith('http') ? url : 'https://' + url;
-                window.open(fullUrl, '_blank');
-            } else {
-                showAlert('Please enter a URL first');
-            }
-        }
-        */
-
-        // Open redirect URL in new tab
-        function openRedirectURL() {
-            const url = document.getElementById('redirectURL').value.trim();
-            if (url) {
-                const fullUrl = url.startsWith('http') ? url : 'https://' + url;
-                window.open(fullUrl, '_blank');
-            } else {
-                showAlert('Please enter a redirect URL first');
-            }
-        }
-
-        // Open failure URL in new tab
-        function openFailureURL() {
-            const url = document.getElementById('failureURL').value.trim();
-            if (url) {
-                const fullUrl = url.startsWith('http') ? url : 'https://' + url;
-                window.open(fullUrl, '_blank');
-            } else {
-                showAlert('Please enter a failure URL first');
-            }
-        }
-
-        // Load all applications
-        async function loadApplications() {
-            try {
-                console.log('🔍 Starting loadApplications...');
-                appGrid.innerHTML = '<div class="loading show"><div class="spinner"></div><p>Loading applications...</p></div>';
-                
-                console.log('📡 Making API call to:', `${API_BASE_URL}/applications`);
-                const result = await apiCall('/applications');
-                console.log('📊 API result:', result);
-                
-                applications = result.data || result || [];
-                console.log('📋 Applications array:', applications);
-                console.log('📊 Applications count:', applications.length);
-                
-                renderApplicationGrid();
-                
-            } catch (error) {
-                console.error('❌ Error loading applications:', error);
-                showAlert('Failed to load applications: ' + error.message);
-                appGrid.innerHTML = '<div style="padding: 20px; text-align: center; color: #dc3545;">Failed to load applications</div>';
-            }
-        }
-
-        // Render application grid
-        function renderApplicationGrid() {
-            console.log('🎨 Rendering application grid...');
-            console.log('📊 Applications to render:', applications);
-            
-            if (applications.length === 0) {
-                console.log('⚠️ No applications to display');
-                appGrid.innerHTML = '<div style="padding: 20px; text-align: center; color: #6c757d;">No applications found</div>';
-                return;
-            }
-
-            // Sort by application_name
-            applications.sort((a, b) => (a.application_name || '').localeCompare(b.application_name || ''));
-            console.log('📋 Sorted applications:', applications);
-
-            const gridHTML = applications.map(app => `
-                <div class="app-item" data-app-id="${app.application_id}" onclick="selectApplication(${app.application_id})">
-                    <div class="name">${app.application_name || 'Unnamed Application'}</div>
-                </div>
-            `).join('');
-            
-            console.log('🏗️ Generated HTML:', gridHTML);
-            appGrid.innerHTML = gridHTML;
-            console.log('✅ Grid rendered successfully');
-        }
-
-        // Select application
-        async function selectApplication(applicationId) {
-            try {
-                // Update grid selection
-                document.querySelectorAll('.app-item').forEach(item => {
-                    item.classList.remove('selected');
-                });
-                document.querySelector(`[data-app-id="${applicationId}"]`).classList.add('selected');
-
-                // Show loading
-                formLoading.style.display = 'block';
-                formContainer.style.display = 'none';
-
-                // Load application details
-                const result = await apiCall(`/applications/${applicationId}`);
-                selectedApplication = result.data || result;
-
-                populateForm(selectedApplication);
-                
-                // Show form and enable buttons
-                formLoading.style.display = 'none';
-                formContainer.style.display = 'block';
-                deleteBtn.disabled = false;
-                submitBtn.disabled = false;
-                isEditing = false;
-                isNewApplication = false;
-
-                hideAlert();
-
-            } catch (error) {
-                console.error('Error loading application:', error);
-                formLoading.style.display = 'none';
-                showAlert('Failed to load application details: ' + error.message);
-            }
-        }
-
-        // Generate random 20-character app key
-        function generateAppKey() {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-            let result = '';
-            for (let i = 0; i < 20; i++) {
-                result += chars.charAt(Math.floor(Math.random() * chars.length));
-            }
-            return result;
-        }
-
-        // Populate form with application data
-        function populateForm(app) {
-            document.getElementById('applicationName').value = app.application_name || '';
-            document.getElementById('description').value = app.description || '';
-            //document.getElementById('applicationURL').value = app.redirect_URL || '';
-            document.getElementById('redirectURL').value = app.redirect_URL || '';
-            document.getElementById('failureURL').value = app.failure_URL || '';
-            document.getElementById('securityRoles').value = app.security_roles || '';
-            document.getElementById('parmEmail').value = app.parm_email || 'No';
-            document.getElementById('parmUsername').value = app.parm_username || 'No';
-            document.getElementById('parmPKCE').value = app.parm_PKCE || 'No';
-            document.getElementById('status').value = app.status || 'Inactive';
-            
-            // Populate app key and other fields
-            document.getElementById('appKey').textContent = app.app_key || 'NULL';
-            document.getElementById('dateCreated').textContent = app.date_created ? new Date(app.date_created).toLocaleString() : '-';
-            document.getElementById('dateUpdated').textContent = app.date_updated ? new Date(app.date_updated).toLocaleString() : '-';
-        }
-
-        // Add new application
-        addAppBtn.addEventListener('click', () => {
-            // Clear selection
-            document.querySelectorAll('.app-item').forEach(item => {
-                item.classList.remove('selected');
-            });
-
-            // Clear form
-            applicationForm.reset();
-            document.getElementById('status').value = 'Inactive';
-            document.getElementById('parmEmail').value = 'No';
-            document.getElementById('parmUsername').value = 'No';
-            document.getElementById('parmPKCE').value = 'No';
-
-            // Show form
-            formContainer.style.display = 'block';
-            formLoading.style.display = 'none';
-
-            // Update state and buttons
-            selectedApplication = null;
-            isNewApplication = true;
-            isEditing = true;
-            deleteBtn.disabled = true;
-            submitBtn.disabled = false;
-
-            hideAlert();
-            document.getElementById('applicationName').focus();
-        });
-
-        // Submit changes
-        submitBtn.addEventListener('click', async () => {
-            try {
-                const applicationName = document.getElementById('applicationName').value.trim();
-                
-                if (!applicationName) {
-                    showAlert('Application Name is required');
-                    return;
-                }
-
-                const applicationData = {
-                    application_name: applicationName,
-                    description: document.getElementById('description').value.trim(),
-                    //redirect_URL: document.getElementById('applicationURL').value.trim(),
-                    redirect_URL: document.getElementById('redirectURL').value.trim(),
-                    failure_URL: document.getElementById('failureURL').value.trim(),
-                    security_roles: document.getElementById('securityRoles').value.trim(),
-                    parm_email: document.getElementById('parmEmail').value,
-                    parm_username: document.getElementById('parmUsername').value,
-                    parm_PKCE: document.getElementById('parmPKCE').value,
-                    status: document.getElementById('status').value
-                };
-
-                let result;
-                if (isNewApplication) {
-                    // Generate app key for new application
-                    applicationData.app_key = generateAppKey();
-                    result = await apiCall('/applications', 'POST', applicationData);
-                    showAlert('Application created successfully', 'success');
-                } else {
-                    result = await apiCall(`/applications/${selectedApplication.application_id}`, 'PUT', applicationData);
-                    showAlert('Application updated successfully', 'success');
-                }
-
-                // Reload applications list
-                await loadApplications();
-                
-                if (isNewApplication) {
-                    const newAppId = result.data?.application_id || result.application_id;
-                    if (newAppId) {
-                        setTimeout(() => selectApplication(newAppId), 500);
-                    } else {
-                        formContainer.style.display = 'none';
-                        selectedApplication = null;
-                        deleteBtn.disabled = true;
-                        submitBtn.disabled = true;
-                    }
-                } else {
-                    if (selectedApplication && selectedApplication.application_id) {
-                        setTimeout(() => selectApplication(selectedApplication.application_id), 500);
-                    }
-                }
-
-                isEditing = false;
-                isNewApplication = false;
-
-            } catch (error) {
-                console.error('Error saving application:', error);
-                showAlert('Failed to save application: ' + error.message);
-            }
-        });
-
-        // Delete application
-        deleteBtn.addEventListener('click', async () => {
-            if (!selectedApplication || !selectedApplication.application_id) {
-                showAlert('No application selected for deletion');
-                return;
-            }
-
-            const delete_respond = await acm_SecurePopUp('Do you want to delete this application?', 'Yes:yes', 'No:no');
-            
-            if (delete_respond !== 'yes') {
-                return;
-            }
-            
-
-
-            try {
-                await apiCall(`/applications/${selectedApplication.application_id}`, 'DELETE');
-                
-                showAlert('Application deleted successfully', 'success');
-                
-                // Reset form and reload applications
-                formContainer.style.display = 'none';
-                selectedApplication = null;
-                deleteBtn.disabled = true;
-                submitBtn.disabled = true;
-                
-                await loadApplications();
-
-            } catch (error) {
-                console.error('Error deleting application:', error);
-                showAlert('Failed to delete application: ' + error.message);
-            }
-        });
-
-        // Cancel changes
-        cancelBtn.addEventListener('click', async () => {
-            if (isEditing && (isNewApplication || selectedApplication)) {
-                const result = await acm_SecurePopUp('Are you sure you want to cancel? All unsaved changes will be lost.', 'Yes:yes', 'No:no');
-                if (result !== 'yes') {
-                    return;
-                }
-            }
-
-            if (selectedApplication && !isNewApplication) {
-                populateForm(selectedApplication);
-            } else {
-                formContainer.style.display = 'none';
-                document.querySelectorAll('.app-item').forEach(item => {
-                    item.classList.remove('selected');
-                });
-                selectedApplication = null;
-                deleteBtn.disabled = true;
-                submitBtn.disabled = true;
-            }
-
-            isEditing = false;
-            isNewApplication = false;
-            hideAlert();
-        });
-
-        // Return to admin page
-        returnBtn.addEventListener('click', () => {
-            window.location.href = 'admin-page.html';
-        });
-
-        // Enable form change tracking
-        applicationForm.addEventListener('input', () => {
-            isEditing = true;
-        });
-
-        // Initialize the application
-        document.addEventListener('DOMContentLoaded', async () => {
-            console.log('Applications Page initialized');
-            
-            // Check authentication and load applications
-            const sessionId = localStorage.getItem('adminSessionId');
-            if (!sessionId) {
-                redirectToLogin('No admin session found. Please login.');
-                return;
-            }
-
-            await loadApplications();
-        });
-    </script>
+    <script src="./lib/acm_Prompts.js"></script>
     <script src="shared-functions.js"></script>
+    <script src="admin-applications.js"></script>
 </body>
 </html>

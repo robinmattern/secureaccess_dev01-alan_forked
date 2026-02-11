@@ -10,7 +10,8 @@ const {
   refreshToken,
   checkEmail,
   createUser,
-  createAppUser
+  createAppUser,
+  register
 } = require('../controllers/authController');
 const { 
   authenticateToken, 
@@ -24,6 +25,7 @@ const strictAuthRateLimit = createRateLimiter(5, 15 * 60 * 1000, 'Too many login
 
 // Temporary storage for authorization codes (use Redis or database in production)
 const authCodes = new Map();
+const MAX_AUTH_CODES = 10000;
 
 // Clean up expired codes every 5 minutes
 setInterval(() => {
@@ -32,6 +34,12 @@ setInterval(() => {
     if (now > data.expires_at) {
       authCodes.delete(code);
     }
+  }
+  if (authCodes.size > MAX_AUTH_CODES) {
+    const entries = Array.from(authCodes.entries());
+    entries.sort((a, b) => a[1].created_at - b[1].created_at);
+    const toDelete = entries.slice(0, authCodes.size - MAX_AUTH_CODES);
+    toDelete.forEach(([code]) => authCodes.delete(code));
   }
 }, 5 * 60 * 1000);
 
@@ -56,37 +64,40 @@ const csrfProtection = (req, res, next) => {
 router.use(authRateLimit);
 
 // POST /api/auth/login - User login (stricter rate limit)
-router.post('/login', strictAuthRateLimit, login);
+router.post('/login', csrfProtection, strictAuthRateLimit, login);
 
 // GET /api/auth/verify - Verify JWT token
 router.get('/verify', authenticateToken, verifyTokenEndpoint);
 
 // POST /api/auth/verify - Verify JWT token (alternative method)
-router.post('/verify', authenticateToken, verifyTokenEndpoint);
+router.post('/verify', csrfProtection, authenticateToken, verifyTokenEndpoint);
 
 // POST /api/auth/password-reset-request - Request password reset (strict rate limit)
-router.post('/password-reset-request', passwordResetRateLimit, passwordResetRequest);
+router.post('/password-reset-request', csrfProtection, passwordResetRateLimit, passwordResetRequest);
 
 // POST /api/auth/password-reset - Reset password with security questions (strict rate limit)
-router.post('/password-reset', passwordResetRateLimit, passwordReset);
+router.post('/password-reset', csrfProtection, passwordResetRateLimit, passwordReset);
 
 // POST /api/auth/logout - Logout user
-router.post('/logout', authenticateToken, logout);
+router.post('/logout', csrfProtection, authenticateToken, logout);
 
 // POST /api/auth/refresh - Refresh JWT token
-router.post('/refresh', authenticateToken, refreshToken);
+router.post('/refresh', csrfProtection, authenticateToken, refreshToken);
+
+// POST /api/auth/register - IODD member registration
+router.post('/register', csrfProtection, register);
 
 // POST /api/auth/check-email - Check if email exists
-router.post('/check-email', checkEmail);
+router.post('/check-email', csrfProtection, checkEmail);
 
 // POST /api/auth/create-user - Create new user from PKCE token
-router.post('/create-user', createUser);
+router.post('/create-user', csrfProtection, createUser);
 
 // POST /api/auth/create-app-user - Create app-user relationship
-router.post('/create-app-user', authenticateToken, createAppUser);
+router.post('/create-app-user', csrfProtection, authenticateToken, createAppUser);
 
 // POST /api/auth/verify-admin - Verify admin access
-router.post('/verify-admin', authenticateToken, (req, res) => {
+router.post('/verify-admin', csrfProtection, authenticateToken, (req, res) => {
   try {
     // Check if user has admin role
     if (!req.user || req.user.role !== 'Admin') {
@@ -121,10 +132,6 @@ router.post('/verify-admin', authenticateToken, (req, res) => {
 router.post('/authorize', csrfProtection, authenticateToken, async (req, res) => {
   try {
     const { 
-      user_id, 
-      username, 
-      email, 
-      role, 
       code_challenge, 
       code_challenge_method, 
       state, 
@@ -139,23 +146,21 @@ router.post('/authorize', csrfProtection, authenticateToken, async (req, res) =>
       });
     }
 
-    // Validate that the authenticated user matches the request
-    if (req.user.userId !== user_id && req.user.user_id !== user_id) {
-      return res.status(403).json({
-        success: false,
-        message: 'User ID mismatch'
-      });
-    }
+    // Use only authenticated user data from JWT token (not from request body)
+    const user_id = req.user.userId || req.user.user_id;
+    const username = req.user.username;
+    const email = req.user.email;
+    const role = req.user.role;
 
     // Generate secure authorization code
     const authCode = crypto.randomBytes(32).toString('hex');
     
     // Store authorization data with 10-minute expiration
     authCodes.set(authCode, {
-      user_id: user_id || req.user.userId || req.user.user_id,
-      username: username || req.user.username,
-      email: email || req.user.email,
-      role: role || req.user.role,
+      user_id,
+      username,
+      email,
+      role,
       code_challenge,
       code_challenge_method,
       state,
@@ -164,7 +169,7 @@ router.post('/authorize', csrfProtection, authenticateToken, async (req, res) =>
       expires_at: Date.now() + (10 * 60 * 1000) // 10 minutes
     });
 
-    console.log(`Authorization code generated for user: ${username || req.user.username}`);
+    console.log(`Authorization code generated for user: ${username}`);
 
     res.json({
       success: true,
@@ -216,13 +221,19 @@ router.post('/token', csrfProtection, async (req, res) => {
       });
     }
 
-    // Verify state parameter if provided
-    if (state && authData.state !== state) {
-      authCodes.delete(code);
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid state parameter'
-      });
+    // Verify state parameter if provided using constant-time comparison
+    if (state && authData.state) {
+      const stateMatch = crypto.timingSafeEqual(
+        Buffer.from(state),
+        Buffer.from(authData.state)
+      );
+      if (!stateMatch) {
+        authCodes.delete(code);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid state parameter'
+        });
+      }
     }
 
     // Validate code_verifier format

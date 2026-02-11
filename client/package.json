@@ -1,9 +1,12 @@
 {
-  "name": "secureaccess_client-apps",
+  "name": "@secureaccess/client-apps",
   "version": "1.0.0",
   "description": "Client applications",
   "scripts": {
     "start:c01": "live-server c01_client-first-app  --port=57301 --no-browser",
-    "start:c03": "live-server c03_register-cors-app --port=57303 --no-browser"  
+    "start:c03": "live-server c03_register-cors-app --port=57303 --no-browser"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.2"
   }
 }

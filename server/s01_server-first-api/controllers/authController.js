@@ -2,6 +2,7 @@
 const { pool } = require('../database');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { handleError } = require('../utils/errorHandler');
 
 // Simple login function with proper response structure
 const login = async (req, res) => {
@@ -17,16 +18,10 @@ const login = async (req, res) => {
     
     // Query the database for the actual user
     const query = 'SELECT user_id, first_name, last_name, username, email, account_status, two_factor_enabled, last_login_timestamp, master_password_hash, salt, role FROM sa_users WHERE username = ? OR email = ?';
-    console.log('========== DEBUG LOGIN START ==========');
-    console.log('SQL Query:', query);
-    console.log('Query parameters:', [username, username]);
     
     const [rows] = await pool.execute(query, [username, username]);
-    console.log('Database result:', rows[0]);
     
     if (rows.length === 0) {
-      console.log('No user found');
-      console.log('========== DEBUG LOGIN END ==========');
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -38,36 +33,11 @@ const login = async (req, res) => {
         user_id: rows[0].user_id,
         username: rows[0].username,
         email: rows[0].email,
-        role: rows[0].role, // Explicitly include role
-        master_password_hash: rows[0].master_password_hash,
-        salt: rows[0].salt
+        role: rows[0].role
     };
     
-    console.log('Created user object:', user);
-    console.log('Role from database:', rows[0].role);
-    console.log('Raw database result:', rows[0]);
-    console.log('Database columns:', Object.keys(rows[0]));
-    console.log('Role field value:', rows[0].role);
-    console.log('Role field type:', typeof rows[0].role);
-    console.log('========== DEBUG LOGIN END ==========');
-    
-    // Debug user data
-    console.log('User data debug:');
-    console.log('Full user object:', user);
-    console.log('User ID:', user.user_id);
-    console.log('Username:', user.username);
-    console.log('Role:', user.role);
-    
-    // Debug password verification
-    console.log('Password verification debug:');
-    console.log('Input password:', password);
-    console.log('User salt:', user.salt);
-    console.log('Stored hash:', user.master_password_hash);
-    console.log('Combined for verification:', password + user.salt);
-    
-    // Verify password (match the format used in user creation)
-    const isValidPassword = await bcrypt.compare(password + user.salt, user.master_password_hash);
-    console.log('Password valid:', isValidPassword);
+    // Verify password (use credentials directly without storing)
+    const isValidPassword = await bcrypt.compare(password + rows[0].salt, rows[0].master_password_hash);
     
     if (!isValidPassword) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -87,11 +57,7 @@ const login = async (req, res) => {
     };
     
     // Get user and role permissions
-    console.log('========== DEBUG PERMISSIONS START ==========');
-    
-    // Ensure role is properly assigned from the database query
     const role = rows[0].role;
-    console.log('User role from database:', role);
     
     const [rolePermissions] = await pool.execute(`
         SELECT p.name 
@@ -99,8 +65,6 @@ const login = async (req, res) => {
         JOIN sa_permissions p ON rp.permission_id = p.id 
         WHERE rp.role = ?
     `, [role]);
-    
-    console.log('Role permissions result:', rolePermissions);
 
     const [userPermissions] = await pool.execute(`
         SELECT p.name 
@@ -108,40 +72,25 @@ const login = async (req, res) => {
         JOIN sa_permissions p ON up.permission_id = p.id 
         WHERE up.user_id = ?
     `, [user.user_id]);
-    
-    console.log('User permissions result:', userPermissions);
-    console.log('========== DEBUG PERMISSIONS END ==========');
 
     // Combine both sets of permissions
     const allPermissions = [...rolePermissions, ...userPermissions];
 
-    // Debug token data before generation
-    console.log('========== DEBUG TOKEN GENERATION START ==========');
     const tokenPayload = {
         userId: user.user_id,
         username: user.username,
         email: user.email,
-        role: user.role, // Use the role from user object
+        role: user.role,
         permissions: allPermissions.map(p => p.name)
     };
-    console.log('Token payload:', tokenPayload);
-    console.log('Role value being added:', role);
-    console.log('========== DEBUG TOKEN GENERATION END ==========');
 
     // Generate real JWT token with permissions
     const token = jwt.sign(
         tokenPayload,
-        process.env.JWT_SECRET || 'your-secret-key',
+        process.env.JWT_SECRET,
         { expiresIn: '1h' }
     );
 
-    // Debug output
-    console.log('User data for token:', {
-        userId: user.user_id,
-        username: user.username,
-        role: user.role
-    });
-    
     // Set JWT token as HTTP-only cookie
     res.cookie('authToken', token, {
       httpOnly: true,
@@ -160,11 +109,7 @@ const login = async (req, res) => {
     });
     
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Login error',
-      error: error.message
-    });
+    handleError(error, res, 'login', 500, 'Login error');
   }
 };
 
@@ -247,10 +192,10 @@ const refreshToken = async (req, res) => {
         userId: user.userId,
         username: user.username,
         email: user.email,
-        role: user.role, // Add user's role
-        permissions: allPermissions.map(p => p.name) // Add permissions to token
+        role: user.role,
+        permissions: allPermissions.map(p => p.name)
       },
-      process.env.JWT_SECRET || 'your-secret-key',
+      process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
     
@@ -270,18 +215,13 @@ const refreshToken = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Token refresh failed',
-      error: error.message
-    });
+    handleError(error, res, 'refresh token');
   }
 };
 
-// Verify JWT token function for middleware
 const verifyToken = async (token, userId) => {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     return {
       userId: decoded.userId,
       username: decoded.username,
@@ -291,6 +231,8 @@ const verifyToken = async (token, userId) => {
       version: 1
     };
   } catch (error) {
+    const errorMessage = error && error.message ? error.message : 'Unknown error';
+    console.error('Token decode error:', errorMessage);
     throw new Error('Invalid or expired token');
   }
 };
@@ -316,17 +258,125 @@ const checkEmail = async (req, res) => {
     });
     
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error checking email',
-      error: error.message
+    handleError(error, res, 'check email');
+  }
+};
+
+// Create new user from IODD registration
+const register = async (req, res) => {
+  try {
+    // Validate API key from header
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey !== process.FVARS.SECURE_API_SECRET) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    // Extract request data
+    const {
+      firstName,
+      lastName,
+      email,
+      username,
+      password,
+      securityQuestion1,
+      securityAnswer1,
+      securityQuestion2,
+      securityAnswer2,
+      appKey,
+      userRole
+    } = req.body;
+
+    // Validate app key
+    if (appKey !== process.FVARS.IODD_APP_KEY) {
+      return res.status(403).json({ success: false, message: 'Invalid app key' });
+    }
+
+    // Validate required fields
+    if (!firstName || !lastName || !email || !username || !password) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+
+    // Check if user already exists
+    const checkQuery = 'SELECT user_id FROM sa_users WHERE email = ? OR username = ?';
+    const [existing] = await pool.execute(checkQuery, [email, username]);
+    
+    if (existing.length > 0) {
+      return res.status(409).json({ success: false, message: 'User already exists' });
+    }
+
+    // Generate salt
+    const salt = await bcrypt.genSalt(10);
+    
+    // Hash the already-hashed password with salt for bcrypt storage
+    const passwordHash = await bcrypt.hash(password + salt, 10);
+    const answer1Hash = securityAnswer1 ? await bcrypt.hash(securityAnswer1 + salt, 10) : null;
+    const answer2Hash = securityAnswer2 ? await bcrypt.hash(securityAnswer2 + salt, 10) : null;
+
+    // Create user account
+    const insertQuery = `
+      INSERT INTO sa_users (
+        first_name, last_name, username, email, account_status,
+        master_password_hash, salt, security_question_1, security_question_2,
+        security_answer_1_hash, security_answer_2_hash, two_factor_secret,
+        jwt_secret_version, refresh_token_rotation_enabled,
+        token_expiration_minutes, role, created_at
+      ) VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, 1, 1, 60, 'User', NOW())
+    `;
+    
+    const [result] = await pool.execute(insertQuery, [
+      firstName,
+      lastName,
+      username,
+      email,
+      passwordHash,
+      salt,
+      securityQuestion1,
+      securityQuestion2,
+      answer1Hash,
+      answer2Hash
+    ]);
+
+    const userId = result.insertId;
+
+    // Get application_id from app_key
+    const appQuery = 'SELECT application_id FROM sa_applications WHERE app_key = ?';
+    const [appRows] = await pool.execute(appQuery, [appKey]);
+    
+    if (appRows.length > 0) {
+      // Link user to IODD app
+      const linkQuery = `
+        INSERT INTO sa_app_user (application_id, user_id, status, track_user, app_role, created_at)
+        VALUES (?, ?, 'Active', 'No', ?, NOW())
+      `;
+      await pool.execute(linkQuery, [appRows[0].application_id, userId, userRole || 'Member']);
+    }
+
+    res.json({
+      success: true,
+      message: 'User created successfully',
+      userId: userId
     });
+
+  } catch (error) {
+    handleError(error, res, 'register user', 500, 'Registration failed');
   }
 };
 
 // Create new user
 const createUser = async (req, res) => {
   try {
+    // Validate API key from header
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey !== process.FVARS.API_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Validate app key from request body
+    const { appKey } = req.body;
+    if (appKey !== process.FVARS.IODD_APP_KEY) {
+      return res.status(403).json({ error: 'Invalid app key' });
+    }
+
     const {
       first_name,
       last_name,
@@ -350,17 +400,7 @@ const createUser = async (req, res) => {
     // Generate salt for password
     const salt = await bcrypt.genSalt(10);
     
-    const query = `
-      INSERT INTO sa_users (
-        first_name, last_name, username, email, account_status,
-        master_password_hash, salt, security_question_1, security_question_2,
-        security_answer_1_hash, security_answer_2_hash, two_factor_secret,
-        jwt_secret_version, refresh_token_rotation_enabled,
-        token_expiration_minutes, role, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-    `;
-    
-    const [result] = await pool.execute(query, [
+    const insertParams = [
       first_name,
       last_name,
       username,
@@ -377,39 +417,43 @@ const createUser = async (req, res) => {
       refresh_token_rotation_enabled,
       token_expiration_minutes,
       role
-    ]);
+    ];
+    
+    const query = `
+      INSERT INTO sa_users (
+        first_name, last_name, username, email, account_status,
+        master_password_hash, salt, security_question_1, security_question_2,
+        security_answer_1_hash, security_answer_2_hash, two_factor_secret,
+        jwt_secret_version, refresh_token_rotation_enabled,
+        token_expiration_minutes, role, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    `;
+    
+    const [result] = await pool.execute(query, insertParams);
     
     // Generate JWT token for the new user
     const tokenPayload = {
       userId: result.insertId,
-      username: username,
-      email: email,
-      role: role
+      username,
+      email,
+      role
     };
     
-    const token = jwt.sign(
-      tokenPayload,
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '1h' }
-    );
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '1h' });
     
     res.json({
       success: true,
       message: 'User created successfully',
       data: {
         user_id: result.insertId,
-        username: username,
-        email: email,
+        username,
+        email,
         jwt_token: token
       }
     });
     
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error creating user',
-      error: error.message
-    });
+    handleError(error, res, 'create user');
   }
 };
 
@@ -481,11 +525,7 @@ const createAppUser = async (req, res) => {
     });
     
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error creating app-user relationship',
-      error: error.message
-    });
+    handleError(error, res, 'create app-user relationship');
   }
 };
 
@@ -499,5 +539,6 @@ module.exports = {
   verifyToken,
   checkEmail,
   createUser,
-  createAppUser
+  createAppUser,
+  register
 };

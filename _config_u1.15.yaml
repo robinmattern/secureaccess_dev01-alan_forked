@@ -1,7 +1,0 @@
-FVARS: 
-  PROJECT_NO:      "55"
-  PROJECT_NAME:    "SecureAccess"
-  PROJECT_VERSION: "1.15.0"
-  CLIENT_HOST:     "http://localhost:#####"
-  SERVER_API_URL:  "http://localhost:#####/api"
-  DATA_PATH:       "../data"

@@ -106,6 +106,7 @@ class PKCEUtils {
             
             return session;
         } catch (error) {
+            console.error('Error retrieving PKCE session:', error?.message || 'Unknown error');
             sessionStorage.removeItem(sessionKey);
             return null;
         }
@@ -136,6 +137,7 @@ class PKCEUtils {
                 userData: decodedUserData
             };
         } catch (error) {
+            console.error('Error decoding user data:', error?.message || 'Unknown error');
             return { token: pkceToken, userData: null };
         }
     }

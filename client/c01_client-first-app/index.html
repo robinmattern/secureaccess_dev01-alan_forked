@@ -479,9 +479,9 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="twoFactorCode">2FA Code (if enabled)</label>
-                    <input type="text" id="twoFactorCode" name="twoFactorCode" placeholder="6-digit code">
+                <div class="form-group" id="twoFactorGroup" style="display: none;">
+                    <label for="twoFactorCode">2-Factor Code:</label>
+                    <input type="text" id="twoFactorCode" name="twoFactorCode" maxlength="8" pattern="[0-9]{8}" placeholder="Enter 8-digit code" disabled>
                 </div>
 
                 <button type="submit" class="btn btn-primary">Login</button>
@@ -510,7 +510,7 @@
 
                 <div class="form-group">
                     <label for="regUsername">Username</label>
-                    <input type="text" id="regUsername" name="username" required>
+                    <input type="text" id="regUsername" name="username" required autocomplete="username">
                 </div>
 
                 <div class="form-group">
@@ -521,15 +521,16 @@
                 <div class="form-group">
                     <label for="regPassword">Password</label>
                     <div class="password-container">
-                        <input type="password" id="regPassword" name="password" required minlength="8">
+                        <input type="password" id="regPassword" name="password" required minlength="12" autocomplete="new-password">
                         <span class="password-toggle" onclick="togglePassword('regPassword')">👁️</span>
                     </div>
+                    <small style="color: #666; font-size: 11px; display: block; margin-top: 4px;">Min 12 chars, uppercase, lowercase, number, special char</small>
                 </div>
 
                 <div class="form-group">
                     <label for="confirmPassword">Confirm Password</label>
                     <div class="password-container">
-                        <input type="password" id="confirmPassword" name="confirmPassword" required>
+                        <input type="password" id="confirmPassword" name="confirmPassword" required autocomplete="new-password">
                         <span class="password-toggle" onclick="togglePassword('confirmPassword')">👁️</span>
                     </div>
                 </div>
@@ -539,14 +540,15 @@
         </div>
     </div>
 
-    <script src="./_config.js"></script>                                              <!-- .(51013.01.2 RAM Use this) -->
+    <script src="./_config.js"></script>
+    <script src="security-headers.js"></script>
+    <script src="./lib/acm_Prompts.js"></script>
     <script>
         // IMMEDIATELY capture URL parameters before any redirects
         (function() {
             const currentUrl = window.location.href;
             const searchParams = window.location.search;
-            console.log('IMMEDIATE CAPTURE - URL:', currentUrl);
-            console.log('IMMEDIATE CAPTURE - Search:', searchParams);
+
             
             if (searchParams) {
                 const params = new URLSearchParams(searchParams);
@@ -556,156 +558,43 @@
                 
                 // Check for reg_key parameter and redirect to register.html
                 if (regKey) {
-                    console.log('FOUND reg_key, redirecting to register.html with full URL');
+
                     window.location.href = 'register.html' + window.location.search;
                     return;
                 }
                 
                 if (appKey) {
                     sessionStorage.setItem('captured_app_key', appKey);
-                    console.log('CAPTURED app_key:', appKey);
+
                 }
                 if (redirect) {
                     sessionStorage.setItem('captured_redirect', redirect);
-                    console.log('CAPTURED redirect:', redirect);
+
                 }
             }
         })();
-        // acm_Prompts.js inline
-        const ACM_APP_TITLE = 'SecureAccess';
-        
-        function acm_SecurePopUp(message, ...buttonDefinitions) {
-            return new Promise((resolve, reject) => {
-                const WindowCaption = ACM_APP_TITLE;
-                if (typeof message !== 'string' || message.trim() === '') {
-                    reject(new Error('Message must be a non-empty string'));
-                    return;
-                }
-                if (buttonDefinitions.length === 0) {
-                    reject(new Error('At least one button must be defined'));
-                    return;
-                }
-                if (buttonDefinitions.length > 10) {
-                    reject(new Error('Maximum 10 buttons allowed'));
-                    return;
-                }
-                const buttons = [];
-                for (let i = 0; i < buttonDefinitions.length; i++) {
-                    const buttonDef = buttonDefinitions[i];
-                    if (typeof buttonDef !== 'string') {
-                        reject(new Error(`Button definition ${i + 1} must be a string`));
-                        return;
-                    }
-                    const parts = buttonDef.split(':');
-                    if (parts.length !== 2) {
-                        reject(new Error(`Invalid button format at position ${i + 1}. Use "Label : Value"`));
-                        return;
-                    }
-                    const label = parts[0].trim();
-                    const value = parts[1].trim();
-                    if (label === '' || value === '') {
-                        reject(new Error(`Button label and value cannot be empty at position ${i + 1}`));
-                        return;
-                    }
-                    if (!/^[\w\s\-.,!?()]+$/.test(label)) {
-                        reject(new Error(`Button label contains invalid characters at position ${i + 1}`));
-                        return;
-                    }
-                    buttons.push({ label, value });
-                }
-                const overlay = document.createElement('div');
-                const modal = document.createElement('div');
-                const titleDiv = document.createElement('div');
-                const messageDiv = document.createElement('div');
-                const buttonsContainer = document.createElement('div');
-                overlay.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 999999; display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif;`;
-                modal.style.cssText = `background: white; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); max-width: 500px; min-width: 300px; padding: 0; margin: 20px; max-height: 80vh; overflow: hidden;`;
-                titleDiv.style.cssText = `padding: 20px 24px 12px 24px; font-size: 18px; font-weight: bold; color: #333; border-bottom: 1px solid #eee; background: #e3f2fd;`;
-                titleDiv.textContent = WindowCaption;
-                messageDiv.style.cssText = `padding: 16px 24px; font-size: 16px; line-height: 1.5; color: #333; word-wrap: break-word;`;
-                if (message.length > 1000) message = message.substring(0, 1000);
-                messageDiv.textContent = message;
-                buttonsContainer.style.cssText = `padding: 16px 24px 24px 24px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;`;
-                buttons.forEach((button, index) => {
-                    const btn = document.createElement('button');
-                    btn.textContent = button.label;
-                    btn.setAttribute('data-value', button.value);
-                    btn.setAttribute('type', 'button');
-                    btn.style.cssText = `background: ${index === 0 ? '#007bff' : '#6c757d'}; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; min-width: 70px;`;
-                    btn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const selectedValue = btn.getAttribute('data-value');
-                        cleanup();
-                        resolve(selectedValue);
-                    });
-                    buttonsContainer.appendChild(btn);
-                });
-                function cleanup() {
-                    if (overlay && overlay.parentNode) {
-                        overlay.parentNode.removeChild(overlay);
-                    }
-                }
-                modal.appendChild(titleDiv);
-                modal.appendChild(messageDiv);
-                modal.appendChild(buttonsContainer);
-                overlay.appendChild(modal);
-                document.body.appendChild(overlay);
-            });
-        }
-    </script>
-    <script src="pkce-utils.js"></script>
-    <script>
-        // Configuration - will be set dynamically from server
-        let API_BASE_URL   = window.FVARS?.SECURE_API_URL || window.location.origin + '/api';  // Fallback if config fails
-        let SECURE_API_URL = API_BASE_URL;
-        
-        // Get URLs from query parameters
-        console.log('=== URL PARAMETER DEBUG ===');
-        console.log('Current URL:', window.location.href);
-        console.log('Search params:', window.location.search);
-        console.log('Hash:', window.location.hash);
-        
-        // Check multiple sources for parameters
+
         const urlParams = new URLSearchParams(window.location.search);
         let appKey = urlParams.get('app_key');
         let redirectParam = urlParams.get('redirect');
         
-        // Also check if parameters are in hash (in case of redirect)
         if (!appKey && window.location.hash) {
             const hashParams = new URLSearchParams(window.location.hash.substring(1));
             appKey = hashParams.get('app_key');
             redirectParam = hashParams.get('redirect');
-            console.log('Found params in hash - app_key:', appKey);
         }
         
-        // Check sessionStorage for captured/preserved parameters
         if (!appKey) {
             appKey = sessionStorage.getItem('captured_app_key') || sessionStorage.getItem('preserved_app_key');
-            console.log('Found app_key in sessionStorage:', appKey);
         }
         if (!redirectParam) {
             redirectParam = sessionStorage.getItem('captured_redirect');
-            console.log('Found redirect in sessionStorage:', redirectParam);
         }
-        
-        console.log('Final parsed app_key:', appKey);
-        console.log('Final parsed redirect:', redirectParam);
-        console.log('All URL params:', Object.fromEntries(urlParams.entries()));
-        console.log('=== END URL DEBUG ===');
         
         // Preserve app_key in sessionStorage if found
         if (appKey) {
             sessionStorage.setItem('preserved_app_key', appKey);
-            console.log('Preserved app_key in sessionStorage:', appKey);
         }
-        
-        // Test function for debugging - can be called from console
-        window.testAppKeyRedirect = function(testAppKey) {
-            console.log('Testing redirect with app_key:', testAppKey);
-            sessionStorage.setItem('preserved_app_key', testAppKey);
-            window.location.href = window.location.origin + window.location.pathname + '?app_key=' + testAppKey;
-        };
         const FailedAttempts = 3;
         
         let applicationData = null;
@@ -716,6 +605,7 @@
         let currentUser = null;
         let authToken = null;
         let failedLoginAttempts = 0;
+        let csrfToken = null;
 
         // User popup functions
         function showUserPopup() {
@@ -752,7 +642,7 @@
             
             if (currentUser) {
                 const pkceKey = window.createPKCEToken(currentUser);
-                const params = new URLSearchParams({ pkce: pkceKey });
+                const params = new URLSearchParams({ auth_token: pkceKey });
                 window.location.href = `${LandingPage}?${params.toString()}`;
             } else {
                 window.location.href = LandingPage;
@@ -845,19 +735,28 @@
                 credentials: 'include'
             };
 
-            // No CSRF tokens needed with SameSite=Strict cookies
+            if (method !== 'GET') {
+                if (csrfToken) {
+                    options.headers['X-CSRF-Token'] = csrfToken;
+
+                }
+            }
 
             if (data) {
                 options.body = JSON.stringify(data);
             }
 
             try {
-                console.log(    `  fetching( "${API_BASE_URL}${endpoint}" )` )          // .(51013.04.5) 
+ 
                 const response = await fetch(`${API_BASE_URL}${endpoint}`, options);    // .(51013.04.6) 
 
                 if (!response.ok) {
                     if (response.status === 401) {
                         throw new Error('Unauthorized. Please check your credentials.');
+                    } else if (response.status === 403) {
+                        const errorText = await response.text();
+                        console.error('403 Forbidden:', errorText);
+                        throw new Error('Access forbidden. CSRF validation may have failed.');
                     } else if (response.status === 404) {
                         throw new Error(`Server endpoint not found: ${endpoint}`);
                     } else if (response.status === 500) {
@@ -951,34 +850,22 @@
         
         // Password reset functionality
         function showPasswordReset() {
-            console.log('=== FORGOT PASSWORD DEBUG ===');
             const usernameField = document.getElementById('loginUsername');
-            console.log('Username field found:', !!usernameField);
             
             if (!usernameField) {
-                console.log('Username field not found!');
                 alert('Username field not found. Please refresh the page.');
                 return;
             }
             
             const username = usernameField.value.trim();
-            console.log('Username value:', `"${username}"`);
-            console.log('Username length:', username.length);
             
             if (!username) {
-                console.log('No username entered, showing alert');
                 alert("Please enter your username or email first, then click 'Forgot Password?'");
                 usernameField.focus();
                 return;
             }
             
-            // Redirect to forgot password page with username parameter
             const redirectUrl = `forgot-password.html?username=${encodeURIComponent(username)}`;
-            console.log('Redirecting to:', redirectUrl);
-            console.log('Encoded username:', encodeURIComponent(username));
-            console.log('Current location:', window.location.href);
-            
-            // Use window.location.assign for better debugging
             window.location.assign(redirectUrl);
         }
 
@@ -986,13 +873,27 @@
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             hideAlert();
-            showLoading();
 
             try {
                 const formData = new FormData(e.target);
+                const username = formData.get('username').trim();
+                const password = formData.get('password');
+                
+                // Check account lockout
+                if (window.AccountLockout && window.AccountLockout.isLocked(username)) {
+                    throw new Error('Account temporarily locked due to multiple failed attempts. Please try again later.');
+                }
+                
+                // Check rate limiting
+                if (!window.RateLimiter.checkLimit(`login_${username}`, 5, 15 * 60 * 1000)) {
+                    throw new Error('Too many login attempts. Please try again later.');
+                }
+                
+                showLoading();
+
                 const loginData = {
-                    username: formData.get('username').trim(),
-                    password: formData.get('password')
+                    username: username,
+                    password: password
                 };
 
                 const twoFactorCode = formData.get('twoFactorCode');
@@ -1006,29 +907,36 @@
 
                 const result = await apiCall('/auth/login', 'POST', loginData);
 
+                if (result.requiresTwoFactor) {
+                    // Enable 2FA input field
+                    document.getElementById('twoFactorGroup').style.display = 'block';
+                    document.getElementById('twoFactorCode').disabled = false;
+                    document.getElementById('twoFactorCode').focus();
+                    showAlert(result.message || '2FA code sent to your email', 'success');
+                    hideLoading();
+                    return;
+                }
+
                 if (result.success) {
                     failedLoginAttempts = 0;
                     
-                    // Store the JWT token
-                    authToken = result.data.token;
+                    // Clear lockout on successful login
+                    if (window.AccountLockout) {
+                        window.AccountLockout.clearAttempts(username);
+                    }
+                    if (window.RateLimiter) {
+                        window.RateLimiter.reset(`login_${username}`);
+                    }
                     
-                    // Store session ID based on user role
-                    console.log('Login result:', result.data);
-                    console.log('Current appKey:', appKey);
-                    console.log('Current applicationData:', applicationData);
+                    authToken = result.data.token;
                     const sessionToken = result.data.sessionId;
                     
                     if (sessionToken) {
-                        console.log('Storing session token for role:', result.data.user.role);
                         if (result.data.user.role === 'Admin') {
                             localStorage.setItem('adminSessionId', sessionToken);
-                            console.log('Stored admin session:', localStorage.getItem('adminSessionId'));
                         } else {
                             localStorage.setItem('userSessionId', sessionToken);
-                            console.log('Stored user session:', localStorage.getItem('userSessionId'));
                         }
-                    } else {
-                        console.log('No sessionId found in login response');
                     }
                     
                     currentUser = {
@@ -1043,66 +951,34 @@
 
                     showAlert('Login successful!', 'success');
 
-                    // Check if app_key parameter exists and redirect to specific application
                     const redirectUrl = applicationData?.redirect_URL;
                     
-                    console.log('=== REDIRECT DEBUG ===');
-                    console.log('appKey exists:', !!appKey);
-                    console.log('appKey value:', appKey);
-                    console.log('applicationData exists:', !!applicationData);
-                    console.log('applicationData:', applicationData);
-                    console.log('redirect_URL field:', applicationData?.redirect_URL);
-                    console.log('parm_PKCE field:', applicationData?.parm_PKCE);
-                    console.log('final redirectUrl:', redirectUrl);
-                    console.log('redirectUrl not empty:', !!redirectUrl?.trim());
-                    console.log('currentUser:', currentUser);
-                    
-                    const hasAppKey = !!appKey;
-                    const hasAppData = !!applicationData;
-                    const hasRedirectUrl = !!redirectUrl;
-                    const redirectUrlNotEmpty = !!redirectUrl?.trim();
-                    
-                    console.log('Condition check:', { hasAppKey, hasAppData, hasRedirectUrl, redirectUrlNotEmpty });
-                    
-                    if (hasAppKey && hasAppData && hasRedirectUrl && redirectUrlNotEmpty) {
-                        console.log('Redirecting to application URL:', redirectUrl);
-                        console.log('Application parm_PKCE setting:', applicationData.parm_PKCE);
-                        
+                    if (appKey && applicationData && redirectUrl && redirectUrl.trim()) {
                         let finalUrl = redirectUrl;
                         if (applicationData.parm_PKCE === 'Yes') {
                             const pkceKey = window.createPKCEToken(currentUser);
-                            const params = new URLSearchParams({ pkce: pkceKey });
+                            const params = new URLSearchParams({ auth_token: pkceKey });
                             finalUrl = `${redirectUrl}?${params.toString()}`;
-                            console.log('Generated PKCE key:', pkceKey);
-                            // Store the PKCE token in localStorage
-                            localStorage.setItem('pkce_token', pkceKey);
                         }
-                        
-                        console.log('Final redirect URL:', finalUrl);
                         window.location.href = finalUrl;
                     } else {
-                        console.log('=== FALLBACK TO APP-LAUNCH ===');
-                        console.log('Reason: Failed condition check');
-                        if (!hasAppKey) console.log('- Missing app_key');
-                        if (!hasAppData) console.log('- Missing applicationData');
-                        if (!hasRedirectUrl) console.log('- Missing redirect_URL');
-                        if (!redirectUrlNotEmpty) console.log('- redirect_URL is empty');
-                        
-                        let reason = 'Unknown';
-                        if (!hasAppKey) reason = 'Missing app_key';
-                        else if (!hasAppData) reason = 'Missing applicationData';
-                        else if (!hasRedirectUrl) reason = 'Missing redirect_URL';
-                        else if (!redirectUrlNotEmpty) reason = 'redirect_URL is empty';
-                        
-
-                        
-                        // Default: redirect all users to app-launch.html
                         window.location.href = 'app-launch.html';
                     }
                 }
 
             } catch (error) {
                 failedLoginAttempts++;
+                
+                // Record failed attempt for account lockout
+                const username = document.getElementById('loginUsername').value.trim();
+                if (window.AccountLockout && username) {
+                    const isLocked = window.AccountLockout.recordFailedAttempt(username);
+                    if (isLocked) {
+                        showAlert('Account locked due to multiple failed attempts. Please try again in 30 minutes.', 'error');
+                        hideLoading();
+                        return;
+                    }
+                }
                 
                 if (failedLoginAttempts >= FailedAttempts) {
                     showAlert('Too many failed attempts. Redirecting...', 'error');
@@ -1156,6 +1032,14 @@
                 if (registrationData.password.length < 8) {
                     throw new Error('Password must be at least 8 characters long');
                 }
+                
+                // Validate password strength
+                if (window.validatePasswordStrength) {
+                    const strength = window.validatePasswordStrength(registrationData.password);
+                    if (!strength.valid) {
+                        throw new Error(strength.errors.join('. '));
+                    }
+                }
 
                 const result = await apiCall('/auth/register', 'POST', registrationData);
 
@@ -1180,63 +1064,62 @@
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', async () => {
-            console.log('SecureAccess Client with PKCE initialized');
-
-
-
-            // Get dynamic configuration
             try {
                 const config = await ConfigManager.getConfig();
                 API_BASE_URL = config.apiBaseUrl;
-                console.log('Using API URL:', API_BASE_URL);
             } catch (error) {
-                console.warn('Could not get server config, using default');
+                // Use default
+            }
+            
+            // Fetch CSRF token
+            try {
+                const csrfUrl = API_BASE_URL.replace('/api', '') + '/csrf-token';
+                const response = await fetch(csrfUrl, { credentials: 'include' });
+                if (response.ok) {
+                    const data = await response.json();
+                    csrfToken = data.csrfToken;
+
+                } else {
+                    console.error('CSRF fetch failed:', response.status);
+                }
+            } catch (error) {
+                console.error('Failed to fetch CSRF token:', error);
+            }
+            
+            // Add 2FA code input validation
+            const twoFactorInput = document.getElementById('twoFactorCode');
+            if (twoFactorInput) {
+                twoFactorInput.addEventListener('input', (e) => {
+                    e.target.value = e.target.value.replace(/[^0-9]/g, '').slice(0, 8);
+                });
             }
             
             // Fetch application data if app_key is provided
             if (appKey) {
-                console.log('App key provided:', appKey);
                 try {
-                    console.log('Fetching application data from:', `${API_BASE_URL}/applications/by-key/${appKey}`);
                     const response = await fetch(`${API_BASE_URL}/applications/by-key/${appKey}`);
-                    console.log('Response status:', response.status);
                     if (response.ok) {
                         const result = await response.json();
-                        console.log('API result:', result);
                         applicationData = result.data;
                         LandingPage = applicationData.redirect_URL || 'app-launch.html';
                         FailedPage = applicationData.failure_URL || 'app-launch.html';
-                        console.log('Application data loaded:', applicationData.application_name);
-                        console.log('LandingPage set to:', LandingPage);
                     } else {
-                        console.warn('Application not found for app_key:', appKey, 'Status:', response.status);
-                        applicationData = null; // Explicitly set to null
+                        applicationData = null;
                     }
                 } catch (error) {
-                    console.error('Error fetching application data:', error);
-                    applicationData = null; // Explicitly set to null on error
+                    applicationData = null;
                 }
             }
 
             // Check server connection
-            await fetch(`${API_BASE_URL.replace('/api', '')}/health`)                    // .(51211.05.1 RAM Added await)
+            await fetch(`${API_BASE_URL.replace('/api', '')}/health`)
                 .then(response => response.json())
                 .then(data => {
-                    if (data.status === 'OK') {
-                        console.log('Server connection successful');
-                    }
+                    // Server is healthy
                 })
                 .catch(async (error) => {
-                    console.warn(`* The SecureAccess server is not running at ${API_BASE_URL}.`);
                     alert(`The SecureAccess server is not running at ${API_BASE_URL}.`);
                 });
-
-            // Check PKCE support
-            if (window.crypto && window.crypto.subtle) {
-                console.log('PKCE support available - Web Crypto API detected');
-            } else {
-                console.warn('PKCE support limited - Web Crypto API not available');
-            }
         });
     </script>
     <script src="shared-functions.js"></script>

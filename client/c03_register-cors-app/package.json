@@ -1,5 +1,5 @@
 {
-  "name": "secureaccess_client-apps",
+  "name": "@secureaccess/client-apps",
   "version": "1.0.0",
   "description": "Client applications",
   "scripts": {

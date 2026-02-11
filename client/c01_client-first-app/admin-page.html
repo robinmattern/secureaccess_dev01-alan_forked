@@ -143,6 +143,7 @@
     </style>
 </head>
 <body>
+    <script src="./_config.js"></script>
     <div class="container">
         <div class="header">
             <h1>Administration</h1>
@@ -162,6 +163,10 @@
                 <button class="btn btn-primary" onclick="manageApplicationUsers()">
                     Application Users
                 </button>
+                
+                <button class="btn btn-primary" onclick="configureSMTP()">
+                    Configure SMTP Server
+                </button>
             </div>
 
             <div class="back-link">
@@ -170,95 +175,10 @@
         </div>
     </div>
 
+    <script src="../lib/acm_Prompts.js"></script>
     <script>
-        // acm_Prompts.js inline
-        const ACM_APP_TITLE = 'SecureAccess';
-        
-        function acm_SecurePopUp(message, ...buttonDefinitions) {
-            return new Promise((resolve, reject) => {
-                const WindowCaption = ACM_APP_TITLE;
-                if (typeof message !== 'string' || message.trim() === '') {
-                    reject(new Error('Message must be a non-empty string'));
-                    return;
-                }
-                if (buttonDefinitions.length === 0) {
-                    reject(new Error('At least one button must be defined'));
-                    return;
-                }
-                if (buttonDefinitions.length > 10) {
-                    reject(new Error('Maximum 10 buttons allowed'));
-                    return;
-                }
-                const buttons = [];
-                for (let i = 0; i < buttonDefinitions.length; i++) {
-                    const buttonDef = buttonDefinitions[i];
-                    if (typeof buttonDef !== 'string') {
-                        reject(new Error(`Button definition ${i + 1} must be a string`));
-                        return;
-                    }
-                    const parts = buttonDef.split(':');
-                    if (parts.length !== 2) {
-                        reject(new Error(`Invalid button format at position ${i + 1}. Use "Label : Value"`));
-                        return;
-                    }
-                    const label = parts[0].trim();
-                    const value = parts[1].trim();
-                    if (label === '' || value === '') {
-                        reject(new Error(`Button label and value cannot be empty at position ${i + 1}`));
-                        return;
-                    }
-                    if (!/^[\w\s\-.,!?()]+$/.test(label)) {
-                        reject(new Error(`Button label contains invalid characters at position ${i + 1}`));
-                        return;
-                    }
-                    buttons.push({ label, value });
-                }
-                const overlay = document.createElement('div');
-                const modal = document.createElement('div');
-                const titleDiv = document.createElement('div');
-                const messageDiv = document.createElement('div');
-                const buttonsContainer = document.createElement('div');
-                overlay.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 999999; display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif;`;
-                modal.style.cssText = `background: white; border-radius: 8px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); max-width: 500px; min-width: 300px; padding: 0; margin: 20px; max-height: 80vh; overflow: hidden;`;
-                titleDiv.style.cssText = `padding: 20px 24px 12px 24px; font-size: 18px; font-weight: bold; color: #333; border-bottom: 1px solid #eee; background: #e3f2fd;`;
-                titleDiv.textContent = WindowCaption;
-                messageDiv.style.cssText = `padding: 16px 24px; font-size: 16px; line-height: 1.5; color: #333; word-wrap: break-word;`;
-                if (message.length > 1000) message = message.substring(0, 1000);
-                messageDiv.textContent = message;
-                buttonsContainer.style.cssText = `padding: 16px 24px 24px 24px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;`;
-                buttons.forEach((button, index) => {
-                    const btn = document.createElement('button');
-                    btn.textContent = button.label;
-                    btn.setAttribute('data-value', button.value);
-                    btn.setAttribute('type', 'button');
-                    btn.style.cssText = `background: ${index === 0 ? '#007bff' : '#6c757d'}; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; min-width: 70px;`;
-                    btn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const selectedValue = btn.getAttribute('data-value');
-                        cleanup();
-                        resolve(selectedValue);
-                    });
-                    buttonsContainer.appendChild(btn);
-                });
-                function cleanup() {
-                    if (overlay && overlay.parentNode) {
-                        overlay.parentNode.removeChild(overlay);
-                    }
-                }
-                modal.appendChild(titleDiv);
-                modal.appendChild(messageDiv);
-                modal.appendChild(buttonsContainer);
-                overlay.appendChild(modal);
-                document.body.appendChild(overlay);
-            });
-        }
-//      let API_BASE_URL   =  window.location.origin + '/api';                          //#.(51013.04.1)
-        let API_BASE_URL   =  window.FVARS.SECURE_API_URL;                              // .(51013.04.1 RAM S.B SERVER_API_URL)
-        let SECURE_API_URL =  window.FVARS.SECURE_API_URL;                              // .(51013.04.2 RAM ?? Only API_BASE_URL S.B. used)
+        const API_BASE_URL = window.FVARS.SECURE_API_URL;
 
-
-        // Check admin session authentication
         function checkAdminSession() {
             const sessionId = localStorage.getItem('adminSessionId');
             
@@ -337,6 +257,10 @@
 
         function manageApplicationUsers() {
             window.location.href = 'admin-app-user.html';
+        }
+        
+        function configureSMTP() {
+            window.location.href = 'admin-smtp.html';
         }
 
         // Initialize page with authentication check

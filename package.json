@@ -4,7 +4,33 @@
   "scripts": {
     "start:c01": "live-server client/c01_client-first-app        --port=57301 --no-browser",
     "start:s01": "nodemon server/s01_server-first-api/server.js",
-    "start:c03": "live-server client/c03_register-cors-app       --port=57303 --no-browser",    
-    "start:s03": "nodemon server/s03_register-cors-api/server.mjs"
+    "start:c03": "live-server client/c03_register-cors-app       --port=57303 --no-browser",
+    "start:s03": "nodemon server/s03_register-cors-api/server.mjs",
+    "prepare": "husky"
+  },
+  "description": "Test.",
+  "main": "_config.yaml.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robinmattern/secureaccess_dev01-alan_forked.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/robinmattern/secureaccess_dev01-alan_forked/issues"
+  },
+  "homepage": "https://github.com/robinmattern/secureaccess_dev01-alan_forked#readme",
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7"
+  },
+  "lint-staged": {
+    "server/**/*.js": "cd server && npx eslint",
+    "client/**/*.js": "cd client && npx eslint"
   }
 }

@@ -10,7 +10,8 @@
         }
     ],
     "settings": {
-        "liveServer.settings.port": 55301,
-        "liveServer.settings.AdvanceCustomBrowserCmdLine": ""
+        "liveServer.settings.port": 55101,
+        "liveServer.settings.AdvanceCustomBrowserCmdLine": "",
+        "liveServer.settings.multiRootWorkspaceName": "SAS_dev01-alan"
     }
 }

@@ -1,6 +1,7 @@
 {
-  "name": "secureaccess_apps",
+  "name": "@secureaccess/register-cors-api",
   "version": "1.0.0",
+  "private": true,
   "scripts": {
     "start":     "nodemon server.mjs",
     "start:s03": "nodemon server.mjs"
